@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nastavení hodin ESP32</title>
+<link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --accent: #00ff88;
+  --font-main: "Inconsolata", monospace;
+  --time-scale: 1.4;
+}
+
+body {
+  background-color: #0c0c0c;
+  color: var(--accent);
+  font-family: var(--font-main);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding-top: 30px;
+}
+
+.container {
+  border: 2px solid var(--accent);
+  padding: 20px 30px;
+  width: 90%;
+  max-width: 900px;
+  transition: filter 0.3s;
+}
+
+h1 {
+  text-align: center;
+  border-bottom: 1px dashed var(--accent);
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+}
+
+pre {
+  text-align: center;
+  white-space: pre;
+  margin-bottom: 15px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 25px;
+}
+
+th, td {
+  border: 1px dashed var(--accent);
+  text-align: center;
+  padding: 4px;
+}
+
+input, select {
+  background-color: #111;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-family: var(--font-main);
+  text-align: center;
+  outline: none;
+}
+
+/* odstranění šipek u input[type=number] */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  appearance: textfield;
+  width: 70px;
+}
+
+/* custom dropdown styling */
+select {
+  cursor: pointer;
+  background: #111;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-main);
+}
+select option {
+  background: #111;
+  color: var(--accent);
+}
+select option:hover, select option:checked, select:focus option:checked {
+  background: var(--accent);
+  color: #111;
+}
+
+button.ascii-btn {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-main);
+  cursor: pointer;
+  padding: 2px 8px;
+  margin: 2px 6px;
+}
+button.ascii-btn:hover {
+  background-color: var(--accent);
+  color: #111;
+}
+
+#saveBtn {
+  display: block;
+  width: 100%;
+  background: none;
+  color: var(--accent);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-main);
+  font-size: 15px;
+  text-align: center;
+  white-space: pre;
+  margin-top: 10px;
+}
+
+/* Dolní toast */
+#toast {
+  position: fixed;
+  bottom: 25px;
+  right: 25px;
+  background: #111;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  font-family: var(--font-main);
+  padding: 12px 20px;
+  opacity: 0;
+  transition: opacity 0.5s;
+  white-space: pre;
+  text-align: center;
+  line-height: 1.3em;
+}
+
+/* Modal */
+#timeModal, #authModal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#timeBox, #authBox {
+  background-color: #111;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  font-family: var(--font-main);
+  padding: 25px 40px;
+  text-align: center;
+  white-space: pre;
+  transform: scale(var(--time-scale));
+}
+
+input.text-input {
+  border: 1px dashed var(--accent);
+  width: 60px;
+  background: #0c0c0c;
+  color: var(--accent);
+  font-family: var(--font-main);
+}
+
+.time-inputs {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 25px;
+  margin: 15px 0;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.blurred {
+  filter: blur(4px);
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>ESP32 CLOCK CONFIG</h1>
+
+    <pre id="regenTitle"></pre>
+    <table id="regenTable">
+      <thead>
+        <tr><th>Den</th><th>Čas regenerace</th></tr>
+      </thead>
+      <tbody id="regenDays"></tbody>
+    </table>
+    <button class="ascii-btn" id="copyRegen">Kopírovat první den → všechny</button>
+
+    <pre id="lightTitle"></pre>
+    <table id="lightTable">
+      <thead>
+        <tr><th>Den</th><th>Svit od</th><th>Svit do</th><th>Intenzita (%)</th></tr>
+      </thead>
+      <tbody id="lightDays"></tbody>
+    </table>
+    <button class="ascii-btn" id="copyLight">Kopírovat první den → všechny</button>
+
+    <pre id="otherTitle"></pre>
+    <table id="otherTable">
+      <tr><td>Posun času (hod)</td><td><input type="number" id="timeOffset" min="-12" max="12" value="0"></td></tr>
+      <tr><td>Doba regenerace (min)</td><td><input type="number" id="regenDuration" min="1" max="240" value="30"></td></tr>
+      <tr><td>Styl regenerace</td><td>
+        <select id="regenStyle">
+          <option value="vlak">Vlak</option>
+          <option value="sportka">Sportka</option>
+          <option value="zpetny_vlak">Zpětný vlak</option>
+        </select>
+      </td></tr>
+      <tr><td>Podsvícení</td><td>
+        <select id="backlightEnabled">
+          <option value="on">Zapnuto</option>
+          <option value="off">Vypnuto</option>
+        </select>
+      </td></tr>
+      <tr><td>Barva podsvícení</td><td>
+        <select id="backlightColor">
+          <option value="green" selected>Zelená</option>
+          <option value="red">Červená</option>
+          <option value="blue">Modrá</option>
+          <option value="yellow">Žlutá</option>
+          <option value="purple">Fialová</option>
+          <option value="white">Bílá</option>
+        </select>
+      </td></tr>
+    </table>
+
+    <button id="saveBtn"></button>
+  </div>
+
+  <div id="toast"></div>
+  <div id="timeModal"><div id="timeBox"></div></div>
+  <div id="authModal"><div id="authBox"></div></div>
+
+<script>
+function makeFrame(text){
+  const line = "+-" + "-".repeat(text.length) + "-+";
+  return `${line}\n| ${text} |\n${line}`;
+}
+
+document.getElementById("regenTitle").textContent = makeFrame("Čas regenerace pro jednotlivé dny");
+document.getElementById("lightTitle").textContent = makeFrame("Čas svitu (od–do) a intenzita pro každý den");
+document.getElementById("otherTitle").textContent = makeFrame("Ostatní nastavení");
+
+const saveBtn=document.getElementById("saveBtn");
+saveBtn.textContent=makeFrame("--- ULOŽIT NASTAVENÍ ---");
+saveBtn.addEventListener("mouseover",()=>saveBtn.textContent=makeFrame("+++ ULOŽIT NASTAVENÍ +++"));
+saveBtn.addEventListener("mouseout",()=>saveBtn.textContent=makeFrame("--- ULOŽIT NASTAVENÍ ---"));
+
+const toast=document.getElementById("toast");
+function showToast(msg="OK - ULOŽENO"){
+  toast.textContent = makeFrame(msg);
+  toast.style.opacity="1";
+  setTimeout(()=>toast.style.opacity="0",2500);
+}
+
+const days=["Pondělí","Úterý","Středa","Čtvrtek","Pátek","Sobota","Neděle"];
+const regenBody=document.getElementById("regenDays");
+const lightBody=document.getElementById("lightDays");
+
+for(const d of days){
+  const id=d.substring(0,3);
+  regenBody.innerHTML += `<tr><td>${d}</td><td><input type="text" id="${id}-regen" placeholder="hh:mm" class="text-input" readonly></td></tr>`;
+  lightBody.innerHTML += `<tr>
+    <td>${d}</td>
+    <td><input type="text" id="${id}-lightStart" placeholder="hh:mm" class="text-input" readonly></td>
+    <td><input type="text" id="${id}-lightEnd" placeholder="hh:mm" class="text-input" readonly></td>
+    <td><input type="number" id="${id}-intensity" min="0" max="100" value="75"></td></tr>`;
+}
+
+const timeModal=document.getElementById("timeModal");
+const timeBox=document.getElementById("timeBox");
+const container=document.querySelector(".container");
+let activeInput=null;
+
+function renderTimeBox(h="hh",m="mm"){
+  timeBox.innerHTML=`
+${makeFrame("NASTAVIT ČAS")}
+<div class="time-inputs">
+  <input type="text" id="hourInput" value="${h}" maxlength="2" class="text-input">
+  <input type="text" id="minuteInput" value="${m}" maxlength="2" class="text-input">
+</div>
+<div class="modal-buttons">
+  <button class="ascii-btn" id="timeOk">OK</button>
+  <button class="ascii-btn" id="timeCancel">Zrušit</button>
+</div>`;
+  const hIn=document.getElementById("hourInput"), mIn=document.getElementById("minuteInput");
+  hIn.select();
+  hIn.addEventListener("input",()=>{ if(hIn.value.length>=2) mIn.focus(); });
+  document.getElementById("timeOk").onclick=()=>closeTimePicker(true);
+  document.getElementById("timeCancel").onclick=()=>closeTimePicker(false);
+}
+
+function openTimePicker(input){
+  activeInput=input;
+  const val=input.value||"hh:mm";
+  const [h,m]=val.split(":");
+  renderTimeBox(h,m);
+  container.classList.add("blurred");
+  timeModal.style.display="flex";
+}
+
+function closeTimePicker(apply=false){
+  if(apply&&activeInput){
+    const h=document.getElementById("hourInput").value.padStart(2,"0");
+    const m=document.getElementById("minuteInput").value.padStart(2,"0");
+    activeInput.value=`${h}:${m}`;
+  }
+  container.classList.remove("blurred");
+  timeModal.style.display="none";
+}
+
+document.querySelectorAll('input[readonly]').forEach(inp=>inp.addEventListener("click",()=>openTimePicker(inp)));
+
+document.getElementById("copyLight").onclick=()=>{
+  const first=document.getElementById("Pon-lightStart").value;
+  const first2=document.getElementById("Pon-lightEnd").value;
+  const firstInt=document.getElementById("Pon-intensity").value;
+  days.slice(1).forEach(d=>{
+    const id=d.substring(0,3);
+    document.getElementById(`${id}-lightStart`).value=first;
+    document.getElementById(`${id}-lightEnd`).value=first2;
+    document.getElementById(`${id}-intensity`).value=firstInt;
+  });
+  showToast("Zkopírováno do všech dnů");
+};
+
+document.getElementById("copyRegen").onclick=()=>{
+  const first=document.getElementById("Pon-regen").value;
+  days.slice(1).forEach(d=>{
+    const id=d.substring(0,3);
+    document.getElementById(`${id}-regen`).value=first;
+  });
+  showToast("Zkopírováno do všech dnů");
+};
+
+document.getElementById("backlightColor").addEventListener("change",()=>{
+  const map={red:"#ff5555",blue:"#55aaff",yellow:"#ffff55",purple:"#cc66ff",white:"#dddddd",green:"#00ff88"};
+  document.documentElement.style.setProperty("--accent",map[document.getElementById("backlightColor").value]||"#00ff88");
+});
+
+const authModal=document.getElementById("authModal");
+const authBox=document.getElementById("authBox");
+
+function openAuth(){
+  authBox.innerHTML=`
+${makeFrame("ZADAT HESLO")}
+<input type="password" id="authPass" class="text-input" placeholder="••••••">
+<div class="modal-buttons">
+  <button class="ascii-btn" id="authOk">OK</button>
+  <button class="ascii-btn" id="authCancel">Zrušit</button>
+</div>`;
+  container.classList.add("blurred");
+  authModal.style.display="flex";
+  document.getElementById("authOk").onclick=()=>closeAuth(true);
+  document.getElementById("authCancel").onclick=()=>closeAuth(false);
+  document.getElementById("authPass").focus();
+}
+
+function closeAuth(ok){
+  if(ok){
+    const pass=document.getElementById("authPass").value;
+    if(pass.trim().length>0) showToast("Ověření OK - Nastavení uloženo");
+    else showToast("Nezadáno heslo!");
+  }
+  container.classList.remove("blurred");
+  authModal.style.display="none";
+}
+
+saveBtn.addEventListener("click",()=>openAuth());
+</script>
+</body>
+</html>
