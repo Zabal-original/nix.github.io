@@ -25,16 +25,13 @@ body{
 }
 #asciiBackground{
   position:fixed;
-  top:0;left:0;right:0;bottom:0;
-  font-family:var(--font-main);
-  font-size:16px;
-  line-height:1.4;
-  color:rgba(0,255,136,0.08);
-  white-space:pre;
-  overflow:hidden;
+  top:0;left:0;
+  width:100%;
+  height:100%;
   z-index:0;
   pointer-events:none;
   user-select:none;
+  opacity:0.3;
 }
 .container{
   border:2px solid var(--accent);
@@ -121,7 +118,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 </style>
 </head>
 <body>
-<div id="asciiBackground"></div>
+<canvas id="asciiBackground"></canvas>
 <div class="container">
   <h1>ESP32 CLOCK CONFIG</h1>
 
@@ -141,7 +138,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 
   <pre id="otherTitle"></pre>
   <table id="otherTable">
-    <tr><td>Posun času (hod)</td><td><input type="number" id="timeOffset" min="-12" max="12" value="0"></td></tr>
+    <tr><td>Posun času (hod)</td><td><input type="number" id="timeOffset" min="-24" max="24" value="0"></td></tr>
     <tr><td>Doba regenerace (min)</td><td><input type="number" id="regenDuration" min="1" max="240" value="30"></td></tr>
     <tr><td>Styl regenerace</td><td>
       <select id="regenStyle"><option value="vlak">Vlak</option><option value="sportka">Sportka</option><option value="zpetny_vlak">Zpětný vlak</option></select>
@@ -279,6 +276,19 @@ document.querySelectorAll('input[type=number][id$="-intensity"]').forEach(inp =>
       this.value = 75;
     }
   });
+});
+
+/* ========== validace posunu času -24 až +24 ========== */
+const timeOffsetInput = document.getElementById("timeOffset");
+timeOffsetInput.addEventListener("input", function(){
+  let val = parseInt(this.value);
+  if(val > 24) this.value = 24;
+  if(val < -24) this.value = -24;
+});
+timeOffsetInput.addEventListener("blur", function(){
+  if(this.value === '' || isNaN(parseInt(this.value))){
+    this.value = 0;
+  }
 });
 
 /* ========== copy buttons ========== */
