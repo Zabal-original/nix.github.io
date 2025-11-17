@@ -38,8 +38,8 @@ body{
 }
 .container{
   border:2px solid var(--accent);
-  border-left:none;
-  border-right:none;
+  border-top:none;
+  border-bottom:none;
   padding:40px 30px;
   width:90%;
   max-width:900px;
@@ -57,11 +57,19 @@ body{
   table{
     font-size:13px;
   }
+  th,td{
+    padding:3px 2px;
+    word-break:break-word;
+  }
   input[type=number]{
     width:50px;
   }
   .time-inputs{
     gap:15px;
+  }
+  pre{
+    font-size:11px;
+    overflow-x:auto;
   }
 }
 @media (max-width: 480px){
@@ -74,12 +82,18 @@ body{
   table{
     font-size:11px;
   }
+  th,td{
+    padding:2px 1px;
+  }
   input.text-input{
     width:45px;
   }
   button.ascii-btn{
     font-size:12px;
     padding:2px 6px;
+  }
+  pre{
+    font-size:10px;
   }
 }
 h1{text-align:center;border-bottom:1px dashed var(--accent);padding-bottom:8px;margin-bottom:15px}
@@ -251,6 +265,20 @@ function closeTimePicker(apply=false){
 
 document.querySelectorAll('input[readonly]').forEach(inp => {
   inp.addEventListener("click", () => openTimePicker(inp));
+});
+
+/* ========== validace intenzity 0-100 ========== */
+document.querySelectorAll('input[type=number][id$="-intensity"]').forEach(inp => {
+  inp.addEventListener("input", function(){
+    let val = parseInt(this.value);
+    if(val > 100) this.value = 100;
+    if(val < 0) this.value = 0;
+  });
+  inp.addEventListener("blur", function(){
+    if(this.value === '' || isNaN(parseInt(this.value))){
+      this.value = 75;
+    }
+  });
 });
 
 /* ========== copy buttons ========== */
