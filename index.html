@@ -147,10 +147,10 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
     max-width:85%;
   }
 }
-#timeModal,#authModal,#intensityModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
-#timeBox,#authBox,#intensityBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
+#authModal,#intensityModal,#timeModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
+#authBox,#intensityBox,#timeBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
 input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;color:var(--accent);font-family:var(--font-main)}
-.time-inputs{display:flex;justify-content:center;align-items:center;gap:10px;margin:15px 0}
+.time-inputs{display:flex;justify-content:center;align-items:center;gap:15px;margin:15px 0}
 .time-column{display:flex;flex-direction:column;align-items:center;gap:8px}
 .time-column button{min-width:40px}
 .modal-buttons{display:flex;justify-content:center;gap:20px;margin-top:10px}
@@ -201,9 +201,9 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 </div>
 
 <div id="toast"></div>
-<div id="timeModal"><div id="timeBox"></div></div>
 <div id="authModal"><div id="authBox"></div></div>
 <div id="intensityModal"><div id="intensityBox"></div></div>
+<div id="timeModal"><div id="timeBox"></div></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -271,27 +271,59 @@ const container = document.querySelector(".container");
 let activeInput = null;
 
 function renderTimeBox(h="hh", m="mm"){
-  timeBox.innerHTML = `
-${makeFrame("NASTAVIT ČAS")}
+  timeBox.innerHTML = `${makeFrame("NASTAVIT ČAS")}
 <div class="time-inputs">
+  <button class="ascii-btn" id="hoursPlus">+</button>
   <input type="text" id="hourInput" value="${h}" maxlength="2" class="text-input">
+  <button class="ascii-btn" id="hoursMinus">-</button>
+  <button class="ascii-btn" id="minutesPlus">+</button>
   <input type="text" id="minuteInput" value="${m}" maxlength="2" class="text-input">
+  <button class="ascii-btn" id="minutesMinus">-</button>
 </div>
 <div class="modal-buttons">
   <button class="ascii-btn" id="timeOk">OK</button>
   <button class="ascii-btn" id="timeCancel">Zrušit</button>
 </div>`;
+  
   const hIn = document.getElementById("hourInput");
   const mIn = document.getElementById("minuteInput");
-  hIn.focus();
-  hIn.select();
-  hIn.addEventListener("input", ()=> {
-    if(hIn.value.length >= 2){
-      mIn.value = "";
-      mIn.focus();
-      mIn.select();
-    }
-  });
+  
+  // Funkce pro hodiny
+  document.getElementById("hoursPlus").onclick = () => {
+    let val = hIn.value === "hh" ? 0 : parseInt(hIn.value) || 0;
+    val = (val + 1) % 24; // Po 23 jde na 0
+    hIn.value = val.toString().padStart(2, '0');
+  };
+  
+  document.getElementById("hoursMinus").onclick = () => {
+    let val = hIn.value === "hh" ? 0 : parseInt(hIn.value) || 0;
+    val = val - 1 < 0 ? 23 : val - 1;
+    hIn.value = val.toString().padStart(2, '0');
+  };
+  
+  // Funkce pro minuty
+  document.getElementById("minutesPlus").onclick = () => {
+    let val = mIn.value === "mm" ? 0 : parseInt(mIn.value) || 0;
+    val = (val + 5) % 60; // Po 59 jde na 0
+    mIn.value = val.toString().padStart(2, '0');
+  };
+  
+  document.getElementById("minutesMinus").onclick = () => {
+    let val = mIn.value === "mm" ? 0 : parseInt(mIn.value) || 0;
+    val = val - 5 < 0 ? 55 : val - 5;
+    mIn.value = val.toString().padStart(2, '0');
+  };
+  
+  // Tlačítka OK a Zrušit (pokud máte funkce pro zavření)
+  document.getElementById("timeOk").onclick = () => {
+    // Zde můžete přidat logiku pro uložení času
+    // např. closeTimePicker(true, hIn.value, mIn.value);
+  };
+  
+  document.getElementById("timeCancel").onclick = () => {
+    // Zde můžete přidat logiku pro zrušení
+    // např. closeTimePicker(false);
+  };
   document.getElementById("timeOk").onclick = ()=> closeTimePicker(true);
   document.getElementById("timeCancel").onclick = ()=> closeTimePicker(false);
 }
@@ -316,13 +348,11 @@ function closeTimePicker(apply=false){
 }
 
 document.querySelectorAll('input[readonly]').forEach(inp => {
-  inp.addEventListener("click", () => {
-    if(inp.classList.contains('intensity-input')){
-      openIntensityPicker(inp);
-    } else if(inp.classList.contains('time-input') || inp.placeholder === 'hh:mm'){
-      openTimePicker(inp);
-    }
-  });
+  if(inp.classList.contains('intensity-input')){
+    inp.addEventListener("click", () => openIntensityPicker(inp));
+  } else if(inp.classList.contains('time-input')){
+    inp.addEventListener("click", () => openTimePicker(inp));
+  }
 });
 
 /* ========== validace intenzity 0-100 ========== */
@@ -419,12 +449,11 @@ const intensityBox = document.getElementById("intensityBox");
 let activeIntensityInput = null;
 
 function renderIntensityBox(value=75){
-  intensityBox.innerHTML = `
-${makeFrame("NASTAVIT INTENZITU")}
-<div class="time-inputs">
-  <button class="ascii-btn" id="intensityMinus">-</button>
-  <input type="text" id="intensityValue" value="${value}" maxlength="3" class="text-input" style="width:80px">
+  intensityBox.innerHTML = makeFrame("NASTAVIT INTENZITU") + `
+/*<div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin:15px 0">*/
   <button class="ascii-btn" id="intensityPlus">+</button>
+  <input type="text" id="intensityValue" value="${value}" maxlength="3" class="text-input" style="width:80px;text-align:center">
+  <button class="ascii-btn" id="intensityMinus">-</button>
 </div>
 <div class="modal-buttons">
   <button class="ascii-btn" id="intensityOk">OK</button>
