@@ -25,10 +25,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 input[type=number]{appearance:textfield;width:70px}
 select{cursor:pointer;background:#111;border:1px solid var(--accent);color:var(--accent);font-family:var(--font-main)}
 select option{background:#111;color:var(--accent)}
-select option:hover, select option:checked, select:focus option:checked{background:var(--accent);color:#111}
+select option:hover, select option:checked, select:focus option:checked{background:#111;color:var(--accent)}
 button.ascii-btn{background:none;border:1px solid var(--accent);color:var(--accent);font-family:var(--font-main);cursor:pointer;padding:2px 8px;margin:2px 6px}
 button.ascii-btn:hover{background:var(--accent);color:#111}
-#saveBtn{display:block;width:100%;background:none;color:var(--accent);border:none;cursor:pointer;font-family:var(--font-main);font-size:15px;text-align:center;white-space:pre;margin-top:10px}
+#saveBtn{display:block;width:fit-content;margin:10px auto 0 auto;background:none;color:var(--accent);border:none;cursor:pointer;font-family:var(--font-main);font-size:15px;text-align:center;white-space:pre;padding:0}
 #toast{position:fixed;bottom:25px;right:25px;background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:12px 20px;opacity:0;transition:opacity .5s;white-space:pre;text-align:center;line-height:1.3}
 #timeModal,#authModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
 #timeBox,#authBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
@@ -315,23 +315,25 @@ async function submitWithAuth(){
     // Smažeme heslo z databáze (už tam není potřeba)
     await DB.ref('/config/_authPassword').remove();
     
-    showToast("Nastavení uloženo");
+    // Nejdřív zavřeme modal
     closeAuth(true);
-    await loadConfig();
     statusEl.textContent = "uloženo";
+    
+    // Pak zobrazíme toast a reloadneme config
+    showToast("Nastavení uloženo");
+    await loadConfig();
     
   }catch(e){
     console.error("Firebase error:", e);
     // Pokud heslo bylo špatné, Firebase vrátí PERMISSION_DENIED
     if(e.code === 'PERMISSION_DENIED' || e.message.includes('PERMISSION_DENIED')){
-      showToast("Chyba: špatné heslo");
+      closeAuth(false);
       statusEl.textContent = "špatné heslo";
-      // Zavřeme modal i při chybě
-      setTimeout(() => closeAuth(false), 2000);
+      showToast("Chyba: špatné heslo");
     }else{
-      showToast("Chyba: " + e.message);
+      closeAuth(false);
       statusEl.textContent = "chyba ukládání";
-      setTimeout(() => closeAuth(false), 2000);
+      showToast("Chyba: " + e.message);
     }
   }
 }
