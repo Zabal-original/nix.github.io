@@ -80,12 +80,11 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 <div id="timeModal"><div id="timeBox"></div></div>
 <div id="authModal"><div id="authBox"></div></div>
 
-<!-- Firebase compat SDKs (non-module, fungují z <script>) -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
 <script>
-/* ========== Firebase config (vložené podle tvých údajů) ========== */
+/* ========== Firebase config ========== */
 const firebaseConfig = {
   apiKey: "AIzaSyAHP3lX7x5OhlHFvCtQFMJRNOMeHJwMBfg",
   authDomain: "anezka-nixie-clock.firebaseapp.com",
@@ -117,7 +116,7 @@ function showToast(msg="OK - ULOŽENO"){
   setTimeout(()=> toast.style.opacity = "0", 2500);
 }
 
-/* ========== generování tabulek (stejné jako dřív) ========== */
+/* ========== generování tabulek ========== */
 const days = ["Pondělí","Úterý","Středa","Čtvrtek","Pátek","Sobota","Neděle"];
 const regenBody = document.getElementById("regenDays");
 const lightBody = document.getElementById("lightDays");
@@ -152,7 +151,6 @@ ${makeFrame("NASTAVIT ČAS")}
   const mIn = document.getElementById("minuteInput");
   hIn.focus();
   hIn.select();
-  // když uživatel napíše 2 znaky, přeskočí se do minut a vymaže placeholder
   hIn.addEventListener("input", ()=> {
     if(hIn.value.length >= 2){
       mIn.value = "";
@@ -220,8 +218,6 @@ async function loadConfig(){
       statusEl.textContent = "konfigurace prázdná";
       return;
     }
-    // naplnit UI
-    // očekávaný formát: { regen: {Pondělí: "hh:mm", ...}, light: {Pondělí: {start,end,intensity}}, other: {...} }
     if(cfg.regen){
       for(const d of days){
         const id = d.substring(0,3);
@@ -276,9 +272,7 @@ function gatherConfig(){
   return config;
 }
 
-/* ========== AUTH modal + odeslání do Cloud Function ========== */
-const CLOUD_FN_URL = "FUNCTION_URL"; // <- sem vlož URL nasazené Cloud Function
-
+/* ========== AUTH modal + přímý zápis do Firebase ========== */
 const authModal = document.getElementById("authModal");
 const authBox = document.getElementById("authBox");
 
@@ -305,40 +299,43 @@ function closeAuth(ok){
 async function submitWithAuth(){
   const pass = document.getElementById("authPass").value || "";
   const config = gatherConfig();
-  // POST na Cloud Function (která ověří heslo a zapíše do RTDB)
+  
+  // Přidáme heslo do konfigurace (pro validaci v Security Rules)
+  const dataToSave = {
+    ...config,
+    _authPassword: pass
+  };
+  
   try{
-    statusEl.textContent = "posílám konfiguraci...";
-    const res = await fetch(CLOUD_FN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pass, config })
-    });
-    const data = await res.json();
-    if(res.ok){
-      showToast("Nastavení uloženo");
-      closeAuth(true);
-      // znovu načíst config z DB (potvrdí zápis)
-      await loadConfig();
-      statusEl.textContent = "uloženo";
-    }else{
-      console.error(data);
-      showToast("Chyba: " + (data.error || res.status));
-      statusEl.textContent = "chyba ukládání";
-    }
+    statusEl.textContent = "ukládám konfiguraci...";
+    
+    // Přímý zápis do Firebase RTDB
+    await DB.ref('/config').set(dataToSave);
+    
+    // Smažeme heslo z databáze (už tam není potřeba)
+    await DB.ref('/config/_authPassword').remove();
+    
+    showToast("Nastavení uloženo");
+    closeAuth(true);
+    await loadConfig();
+    statusEl.textContent = "uloženo";
+    
   }catch(e){
     console.error(e);
-    showToast("Chyba síť");
-    statusEl.textContent = "chyba síť";
+    // Pokud heslo bylo špatné, Firebase vrátí PERMISSION_DENIED
+    if(e.code === 'PERMISSION_DENIED'){
+      showToast("Chyba: špatné heslo");
+      statusEl.textContent = "špatné heslo";
+    }else{
+      showToast("Chyba: " + e.message);
+      statusEl.textContent = "chyba ukládání";
+    }
   }
 }
 
 /* ========== event: klik ULOŽIT otevře auth modal ========== */
 saveBtn.addEventListener("click", ()=> openAuth());
 
-/* ========== drobné: označit placeholder hh/mm kdykoli se otevře modal přímo ========== */
-/* už implementováno v renderTimeBox (hIn.focus + hIn.select) */
-
-/* ========== hotovo ========== */
 </script>
 </body>
 </html>
