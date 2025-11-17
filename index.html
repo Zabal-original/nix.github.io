@@ -110,12 +110,14 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
   font-family:var(--font-main);
   padding:12px 20px;
   opacity:0;
-  transition:opacity .5s;
+  transition:opacity .5s, visibility .5s;
+  visibility:hidden;
   white-space:pre;
   text-align:center;
   line-height:1.3;
   z-index:2000;
   max-width:300px;
+  pointer-events:none;
 }
 @media (max-width: 768px){
   #toast{
@@ -179,8 +181,8 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
     <tr><td>Barva podsvícení</td><td>
       <select id="backlightColor"><option value="green" selected>Zelená</option><option value="red">Červená</option><option value="blue">Modrá</option><option value="yellow">Žlutá</option><option value="purple">Fialová</option><option value="white">Bílá</option></select>
     </td></tr>
-    <tr><td>Zamknout barvu UI</td><td>
-      <select id="lockUIColor"><option value="off">Vypnuto</option><option value="on">Zapnuto</option></select>
+    <tr><td>Barva UI</td><td>
+      <select id="lockUIColor"><option value="off">Výchozí</option><option value="on">Vlastní</option></select>
     </td></tr>
     <tr id="uiColorRow" style="display:none"><td>Barva UI (hex)</td><td>
       <input type="text" id="uiColorValue" placeholder="#00ff88" maxlength="7" style="width:100px">
@@ -232,7 +234,11 @@ function showToast(msg="OK - ULOŽENO", duration=2500){
     toast.textContent = makeFrame(msg);
   }
   toast.style.opacity = "1";
-  setTimeout(()=> toast.style.opacity = "0", duration);
+  toast.style.visibility = "visible";
+  setTimeout(()=> {
+    toast.style.opacity = "0";
+    setTimeout(()=> toast.style.visibility = "hidden", 500);
+  }, duration);
 }
 
 /* ========== generování tabulek ========== */
@@ -383,8 +389,15 @@ document.getElementById("copyRegen").onclick = () => {
 async function loadConfig(){
   try{
     showToast("Načítám...", 10000);
+    
+    // Načteme ESP32 config
     const snap = await DB.ref('/config').once('value');
     const cfg = snap.val();
+    
+    // Načteme UI config
+    const uiSnap = await DB.ref('/ui_config').once('value');
+    const uiCfg = uiSnap.val() || {};
+    
     if(!cfg){
       showToast("Konfigurace prázdná");
       return;
@@ -410,17 +423,20 @@ async function loadConfig(){
       document.getElementById("regenStyle").value = cfg.other.regenStyle || "vlak";
       document.getElementById("backlightEnabled").value = cfg.other.backlightEnabled || "on";
       document.getElementById("backlightColor").value = cfg.other.backlightColor || "green";
-      document.getElementById("lockUIColor").value = cfg.other.lockUIColor || "off";
-      document.getElementById("uiColorValue").value = cfg.other.uiColorValue || "#00ff88";
-      
-      // Zobraz/skryj řádek s barvou UI
-      toggleUIColorRow();
-      
-      // Aplikuj barvu pokud je zamknutá
-      if(cfg.other.lockUIColor === "on" && cfg.other.uiColorValue){
-        applyUIColor(cfg.other.uiColorValue);
-      }
     }
+    
+    // Načteme UI nastavení
+    document.getElementById("lockUIColor").value = uiCfg.lockUIColor || "off";
+    document.getElementById("uiColorValue").value = uiCfg.uiColorValue || "#00ff88";
+    
+    // Zobraz/skryj řádek s barvou UI
+    toggleUIColorRow();
+    
+    // Aplikuj barvu pokud je vlastní
+    if(uiCfg.lockUIColor === "on" && uiCfg.uiColorValue){
+      applyUIColor(uiCfg.uiColorValue);
+    }
+    
     showToast("Načteno", 1500);
   }catch(e){
     console.error(e);
@@ -483,8 +499,28 @@ async function submitWithAuth(){
   const pass = document.getElementById("authPass").value || "";
   const config = gatherConfig();
   
+  // Připravíme data PRO ESP32 (bez UI nastavení)
+  const espConfig = {
+    regen: config.regen,
+    light: config.light,
+    other: {
+      timeOffset: config.other.timeOffset,
+      regenDuration: config.other.regenDuration,
+      regenStyle: config.other.regenStyle,
+      backlightEnabled: config.other.backlightEnabled,
+      backlightColor: config.other.backlightColor
+    },
+    lastModified: config.lastModified
+  };
+  
+  // UI nastavení ukládáme ODDĚLENĚ
+  const uiConfig = {
+    lockUIColor: config.other.lockUIColor,
+    uiColorValue: config.other.uiColorValue
+  };
+  
   const dataToSave = {
-    ...config,
+    ...espConfig,
     _authPassword: pass,
     _authTimestamp: Date.now()
   };
@@ -492,11 +528,15 @@ async function submitWithAuth(){
   try{
     showToast("Ukládám...", 10000);
     
+    // Uložení ESP32 konfigurace (hlavní /config)
     await DB.ref('/config').set(dataToSave);
     await new Promise(resolve => setTimeout(resolve, 500));
     
     await DB.ref('/config/_authPassword').remove();
     await DB.ref('/config/_authTimestamp').remove();
+    
+    // Uložení UI konfigurace (oddělený node)
+    await DB.ref('/ui_config').set(uiConfig);
     
     closeAuth(true);
     await new Promise(resolve => setTimeout(resolve, 300));
