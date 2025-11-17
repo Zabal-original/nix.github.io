@@ -100,7 +100,42 @@ select option:checked{background:#1a1a1a;color:var(--accent)}
 button.ascii-btn{background:none;border:1px solid var(--accent);color:var(--accent);font-family:var(--font-main);cursor:pointer;padding:2px 8px;margin:2px 6px}
 button.ascii-btn:hover{background:var(--accent);color:#111}
 #saveBtn{display:block;width:fit-content;margin:10px auto 0 auto;background:none;color:var(--accent);border:none;cursor:pointer;font-family:var(--font-main);font-size:15px;text-align:center;white-space:pre;padding:0}
-#toast{position:fixed;bottom:25px;right:25px;background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:12px 20px;opacity:0;transition:opacity .5s;white-space:pre;text-align:center;line-height:1.3}
+#toast{
+  position:fixed;
+  bottom:25px;
+  right:25px;
+  background:#111;
+  color:var(--accent);
+  border:2px solid var(--accent);
+  font-family:var(--font-main);
+  padding:12px 20px;
+  opacity:0;
+  transition:opacity .5s;
+  white-space:pre;
+  text-align:center;
+  line-height:1.3;
+  z-index:2000;
+  max-width:300px;
+}
+@media (max-width: 768px){
+  #toast{
+    bottom:15px;
+    right:15px;
+    left:15px;
+    max-width:none;
+    font-size:13px;
+    padding:10px 15px;
+  }
+}
+@media (max-width: 480px){
+  #toast{
+    bottom:10px;
+    right:10px;
+    left:10px;
+    font-size:12px;
+    padding:8px 12px;
+  }
+}
 #timeModal,#authModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
 #timeBox,#authBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
 input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;color:var(--accent);font-family:var(--font-main)}
@@ -144,7 +179,6 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
   </table>
 
   <button id="saveBtn"></button>
-  <div class="small-note">Status: <span id="status">načítám...</span></div>
 </div>
 
 <div id="toast"></div>
@@ -181,10 +215,10 @@ saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---");
 saveBtn.addEventListener("mouseover", ()=> saveBtn.textContent = makeFrame("+++ ULOŽIT NASTAVENÍ +++"));
 saveBtn.addEventListener("mouseout", ()=> saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---"));
 const toast = document.getElementById("toast");
-function showToast(msg="OK - ULOŽENO"){
+function showToast(msg="OK - ULOŽENO", duration=2500){
   toast.textContent = makeFrame(msg);
   toast.style.opacity = "1";
-  setTimeout(()=> toast.style.opacity = "0", 2500);
+  setTimeout(()=> toast.style.opacity = "0", duration);
 }
 
 /* ========== generování tabulek ========== */
@@ -306,14 +340,13 @@ document.getElementById("copyRegen").onclick = () => {
 };
 
 /* ========== načtení configu z Firebase při startu ========== */
-const statusEl = document.getElementById("status");
 async function loadConfig(){
   try{
-    statusEl.textContent = "načítám konfiguraci z Firebase...";
+    showToast("Načítám...", 10000);
     const snap = await DB.ref('/config').once('value');
     const cfg = snap.val();
     if(!cfg){
-      statusEl.textContent = "konfigurace prázdná";
+      showToast("Konfigurace prázdná");
       return;
     }
     if(cfg.regen){
@@ -338,10 +371,10 @@ async function loadConfig(){
       document.getElementById("backlightEnabled").value = cfg.other.backlightEnabled || "on";
       document.getElementById("backlightColor").value = cfg.other.backlightColor || "green";
     }
-    statusEl.textContent = "konfigurace načtena";
+    showToast("Načteno", 1500);
   }catch(e){
     console.error(e);
-    statusEl.textContent = "chyba při načítání";
+    showToast("Chyba načítání");
   }
 }
 loadConfig();
@@ -398,7 +431,6 @@ async function submitWithAuth(){
   const pass = document.getElementById("authPass").value || "";
   const config = gatherConfig();
   
-  // Přidáme heslo + timestamp pro validaci
   const dataToSave = {
     ...config,
     _authPassword: pass,
@@ -406,43 +438,28 @@ async function submitWithAuth(){
   };
   
   try{
-    statusEl.textContent = "ukládám konfiguraci...";
+    showToast("Ukládám...", 10000);
     
-    // Přímý zápis do Firebase RTDB
     await DB.ref('/config').set(dataToSave);
-    
-    // Počkáme chvíli než se data zapíšou
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Smažeme autentizační pole
     await DB.ref('/config/_authPassword').remove();
     await DB.ref('/config/_authTimestamp').remove();
     
-    // Zavřeme modal
     closeAuth(true);
-    
-    // Počkáme na zavření animace
     await new Promise(resolve => setTimeout(resolve, 300));
     
-    // Teprve teď zobrazíme toast
-    statusEl.textContent = "připraveno";
     showToast("Nastavení uloženo");
-    
-    // Reload config
     await loadConfig();
     
   }catch(e){
     console.error("Firebase error:", e);
     closeAuth(false);
-    
-    // Počkáme na zavření modalu
     await new Promise(resolve => setTimeout(resolve, 300));
     
     if(e.code === 'PERMISSION_DENIED' || e.message.includes('PERMISSION_DENIED')){
-      statusEl.textContent = "připraveno";
       showToast("Chyba: špatné heslo");
     }else{
-      statusEl.textContent = "připraveno";
       showToast("Chyba: " + e.message);
     }
   }
