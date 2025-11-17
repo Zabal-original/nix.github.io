@@ -119,21 +119,24 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
 }
 @media (max-width: 768px){
   #toast{
-    bottom:15px;
-    right:15px;
-    left:15px;
-    max-width:none;
-    font-size:13px;
-    padding:10px 15px;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    right:auto;
+    max-width:80%;
+    font-size:16px;
+    padding:15px 25px;
+    white-space:normal;
+    border:3px solid var(--accent);
+    box-shadow:0 0 20px rgba(0,255,136,0.3);
   }
 }
 @media (max-width: 480px){
   #toast{
-    bottom:10px;
-    right:10px;
-    left:10px;
-    font-size:12px;
-    padding:8px 12px;
+    bottom:15px;
+    font-size:15px;
+    padding:12px 20px;
+    max-width:85%;
   }
 }
 #timeModal,#authModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
@@ -176,6 +179,12 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
     <tr><td>Barva podsvícení</td><td>
       <select id="backlightColor"><option value="green" selected>Zelená</option><option value="red">Červená</option><option value="blue">Modrá</option><option value="yellow">Žlutá</option><option value="purple">Fialová</option><option value="white">Bílá</option></select>
     </td></tr>
+    <tr><td>Zamknout barvu UI</td><td>
+      <select id="lockUIColor"><option value="off">Vypnuto</option><option value="on">Zapnuto</option></select>
+    </td></tr>
+    <tr id="uiColorRow" style="display:none"><td>Barva UI (hex)</td><td>
+      <input type="text" id="uiColorValue" placeholder="#00ff88" maxlength="7" style="width:100px">
+    </td></tr>
   </table>
 
   <button id="saveBtn"></button>
@@ -216,7 +225,12 @@ saveBtn.addEventListener("mouseover", ()=> saveBtn.textContent = makeFrame("+++ 
 saveBtn.addEventListener("mouseout", ()=> saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---"));
 const toast = document.getElementById("toast");
 function showToast(msg="OK - ULOŽENO", duration=2500){
-  toast.textContent = makeFrame(msg);
+  // Na mobilu bez ASCII rámečku, na desktopu s ním
+  if(window.innerWidth <= 768){
+    toast.textContent = msg;
+  } else {
+    toast.textContent = makeFrame(msg);
+  }
   toast.style.opacity = "1";
   setTimeout(()=> toast.style.opacity = "0", duration);
 }
@@ -317,6 +331,32 @@ timeOffsetInput.addEventListener("blur", function(){
   }
 });
 
+/* ========== zamknutí barvy UI - zobraz/skryj řádek ========== */
+function toggleUIColorRow(){
+  const lockSelect = document.getElementById("lockUIColor");
+  const colorRow = document.getElementById("uiColorRow");
+  if(lockSelect.value === "on"){
+    colorRow.style.display = "table-row";
+  } else {
+    colorRow.style.display = "none";
+  }
+}
+
+document.getElementById("lockUIColor").addEventListener("change", toggleUIColorRow);
+
+/* ========== aplikace barvy UI ========== */
+function applyUIColor(color){
+  if(/^#[0-9A-F]{6}$/i.test(color)){
+    document.documentElement.style.setProperty('--accent', color);
+  }
+}
+
+document.getElementById("uiColorValue").addEventListener("input", function(){
+  if(document.getElementById("lockUIColor").value === "on"){
+    applyUIColor(this.value);
+  }
+});
+
 /* ========== copy buttons ========== */
 document.getElementById("copyLight").onclick = () => {
   const first = document.getElementById("Pon-lightStart").value;
@@ -370,6 +410,16 @@ async function loadConfig(){
       document.getElementById("regenStyle").value = cfg.other.regenStyle || "vlak";
       document.getElementById("backlightEnabled").value = cfg.other.backlightEnabled || "on";
       document.getElementById("backlightColor").value = cfg.other.backlightColor || "green";
+      document.getElementById("lockUIColor").value = cfg.other.lockUIColor || "off";
+      document.getElementById("uiColorValue").value = cfg.other.uiColorValue || "#00ff88";
+      
+      // Zobraz/skryj řádek s barvou UI
+      toggleUIColorRow();
+      
+      // Aplikuj barvu pokud je zamknutá
+      if(cfg.other.lockUIColor === "on" && cfg.other.uiColorValue){
+        applyUIColor(cfg.other.uiColorValue);
+      }
     }
     showToast("Načteno", 1500);
   }catch(e){
@@ -398,6 +448,8 @@ function gatherConfig(){
   other.regenStyle = document.getElementById("regenStyle").value;
   other.backlightEnabled = document.getElementById("backlightEnabled").value;
   other.backlightColor = document.getElementById("backlightColor").value;
+  other.lockUIColor = document.getElementById("lockUIColor").value;
+  other.uiColorValue = document.getElementById("uiColorValue").value || "#00ff88";
 
   const config = { regen, light, other, lastModified: Date.now() };
   return config;
