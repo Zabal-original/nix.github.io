@@ -321,14 +321,17 @@ async function submitWithAuth(){
     statusEl.textContent = "uloženo";
     
   }catch(e){
-    console.error(e);
+    console.error("Firebase error:", e);
     // Pokud heslo bylo špatné, Firebase vrátí PERMISSION_DENIED
-    if(e.code === 'PERMISSION_DENIED'){
+    if(e.code === 'PERMISSION_DENIED' || e.message.includes('PERMISSION_DENIED')){
       showToast("Chyba: špatné heslo");
       statusEl.textContent = "špatné heslo";
+      // Zavřeme modal i při chybě
+      setTimeout(() => closeAuth(false), 2000);
     }else{
       showToast("Chyba: " + e.message);
       statusEl.textContent = "chyba ukládání";
+      setTimeout(() => closeAuth(false), 2000);
     }
   }
 }
