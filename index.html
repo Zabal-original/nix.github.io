@@ -519,24 +519,29 @@ async function submitWithAuth(){
     uiColorValue: config.other.uiColorValue
   };
   
-  const dataToSave = {
-    ...espConfig,
-    _authPassword: pass,
-    _authTimestamp: Date.now()
-  };
-  
   try{
     showToast("Ukládám...", 10000);
     
-    // Uložení ESP32 konfigurace (hlavní /config)
-    await DB.ref('/config').set(dataToSave);
+    // Nejdřív nastavíme autentizační heslo
+    await DB.ref('/_auth').set({
+      password: pass,
+      timestamp: Date.now()
+    });
+    
+    // Počkáme chvíli než se heslo zapíše
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Teď uložíme oba configy (mají už přístup přes /_auth/password)
+    await Promise.all([
+      DB.ref('/config').set(espConfig),
+      DB.ref('/ui_config').set(uiConfig)
+    ]);
+    
+    // Počkáme na dokončení
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    await DB.ref('/config/_authPassword').remove();
-    await DB.ref('/config/_authTimestamp').remove();
-    
-    // Uložení UI konfigurace (oddělený node)
-    await DB.ref('/ui_config').set(uiConfig);
+    // Smažeme autentizační node
+    await DB.ref('/_auth').remove();
     
     closeAuth(true);
     await new Promise(resolve => setTimeout(resolve, 300));
