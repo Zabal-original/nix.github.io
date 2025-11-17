@@ -450,10 +450,10 @@ let activeIntensityInput = null;
 
 function renderIntensityBox(value=75){
   intensityBox.innerHTML = makeFrame("NASTAVIT INTENZITU") + `
-/*<div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin:15px 0">*/
-  <button class="ascii-btn" id="intensityPlus">+</button>
-  <input type="text" id="intensityValue" value="${value}" maxlength="3" class="text-input" style="width:80px;text-align:center">
+<div style="display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;margin:15px 0">
   <button class="ascii-btn" id="intensityMinus">-</button>
+  <input type="text" id="intensityValue" value="${value}" maxlength="3" class="text-input" style="width:80px;text-align:center">
+  <button class="ascii-btn" id="intensityPlus">+</button>
 </div>
 <div class="modal-buttons">
   <button class="ascii-btn" id="intensityOk">OK</button>
