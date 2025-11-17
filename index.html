@@ -344,7 +344,7 @@ async function submitWithAuth(){
     await new Promise(resolve => setTimeout(resolve, 300));
     
     // Teprve teď zobrazíme toast
-    statusEl.textContent = "uloženo";
+    statusEl.textContent = "připraveno";
     showToast("Nastavení uloženo");
     
     // Reload config
@@ -358,10 +358,10 @@ async function submitWithAuth(){
     await new Promise(resolve => setTimeout(resolve, 300));
     
     if(e.code === 'PERMISSION_DENIED' || e.message.includes('PERMISSION_DENIED')){
-      statusEl.textContent = "špatné heslo";
+      statusEl.textContent = "připraveno";
       showToast("Chyba: špatné heslo");
     }else{
-      statusEl.textContent = "chyba ukládání";
+      statusEl.textContent = "připraveno";
       showToast("Chyba: " + e.message);
     }
   }
