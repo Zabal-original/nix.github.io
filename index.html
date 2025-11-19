@@ -91,6 +91,9 @@ body{
   pre{
     font-size:10px;
   }
+  #colorBox{
+    transform:scale(0.85);
+  }
 }
 h1{text-align:center;border-bottom:1px dashed var(--accent);padding-bottom:8px;margin-bottom:15px}
 pre{white-space:pre;text-align:center;margin-bottom:15px}
@@ -147,8 +150,8 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
     max-width:85%;
   }
 }
-#authModal,#intensityModal,#timeModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
-#authBox,#intensityBox,#timeBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
+#authModal,#intensityModal,#timeModal,#colorModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
+#authBox,#intensityBox,#timeBox,#colorBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
 input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;color:var(--accent);font-family:var(--font-main)}
 .time-inputs{display:flex;justify-content:center;align-items:center;gap:15px;margin:15px 0;flex-direction:column}
 .time-row{display:flex;align-items:center;gap:10px}
@@ -162,6 +165,8 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 <body>
 <div class="container">
   <h1>ESP32 CLOCK CONFIG</h1>
+
+  <button id="powerBtn" style="display:block;width:fit-content;margin:20px auto;background:none;color:var(--accent);border:none;cursor:pointer;font-family:var(--font-main);font-size:15px;text-align:center;white-space:pre;padding:0"></button>
 
   <pre id="regenTitle"></pre>
   <table id="regenTable">
@@ -194,7 +199,10 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
       <select id="lockUIColor"><option value="off">Výchozí</option><option value="on">Vlastní</option></select>
     </td></tr>
     <tr id="uiColorRow" style="display:none"><td>Barva UI (hex)</td><td>
-      <input type="text" id="uiColorValue" placeholder="#00ff88" maxlength="7" style="width:100px">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <input type="text" id="uiColorValue" placeholder="#00ff88" maxlength="7" style="width:100px">
+        <button class="ascii-btn" id="colorPickerBtn" style="padding:4px 8px">[ ◆ ]</button>
+      </div>
     </td></tr>
   </table>
 
@@ -205,6 +213,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 <div id="authModal"><div id="authBox"></div></div>
 <div id="intensityModal"><div id="intensityBox"></div></div>
 <div id="timeModal"><div id="timeBox"></div></div>
+<div id="colorModal"><div id="colorBox"></div></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -235,6 +244,32 @@ const saveBtn = document.getElementById("saveBtn");
 saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---");
 saveBtn.addEventListener("mouseover", ()=> saveBtn.textContent = makeFrame("+++ ULOŽIT NASTAVENÍ +++"));
 saveBtn.addEventListener("mouseout", ()=> saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---"));
+const powerBtn = document.getElementById("powerBtn");
+let clockEnabled = true;
+function updatePowerBtn(){
+  if(clockEnabled){
+    powerBtn.textContent = makeFrame("=== HODINY ZAPNUTY ===");
+    powerBtn.style.color = "var(--accent)";
+  } else {
+    powerBtn.textContent = makeFrame("XXX HODINY VYPNUTY XXX");
+    powerBtn.style.color = "#ff0044";
+  }
+}
+updatePowerBtn();
+powerBtn.addEventListener("mouseover", ()=> {
+  if(clockEnabled){
+    powerBtn.textContent = makeFrame("XXX VYPNOUT HODINY XXX");
+    powerBtn.style.color = "#ff0044";
+  } else {
+    powerBtn.textContent = makeFrame("=== ZAPNOUT HODINY ===");
+    powerBtn.style.color = "var(--accent)";
+  }
+});
+powerBtn.addEventListener("mouseout", ()=> updatePowerBtn());
+powerBtn.addEventListener("click", ()=> {
+  clockEnabled = !clockEnabled;
+  updatePowerBtn();
+});
 const toast = document.getElementById("toast");
 function showToast(msg="OK - ULOŽENO", duration=2500){
   // Na mobilu bez ASCII rámečku, na desktopu s ním
@@ -448,6 +483,155 @@ document.getElementById("uiColorValue").addEventListener("input", function(){
   }
 });
 
+/* ========== color picker modal ========== */
+const colorModal = document.getElementById("colorModal");
+const colorBox = document.getElementById("colorBox");
+
+let userColors = [
+  { name: "Zelená", hex: "#00ff88" },
+  { name: "Červená", hex: "#ff0044" },
+  { name: "Modrá", hex: "#00aaff" },
+  { name: "Žlutá", hex: "#ffdd00" },
+  { name: "Fialová", hex: "#cc00ff" },
+  { name: "Bílá", hex: "#ffffff" },
+  { name: "Oranžová", hex: "#ff8800" },
+  { name: "Růžová", hex: "#ff0088" },
+  { name: "Tyrkysová", hex: "#00ffdd" },
+  { name: "Limetková", hex: "#88ff00" },
+  { name: "Azurová", hex: "#0088ff" },
+  { name: "Magenta", hex: "#ff00ff" },
+  { name: "Korálová", hex: "#ff4466" },
+  { name: "Zlatá", hex: "#ffaa00" },
+  { name: "Mátová", hex: "#00ffaa" }
+];
+
+async function loadUserColors(){
+  try{
+    const snap = await DB.ref('/ui_config/userColors').once('value');
+    const saved = snap.val();
+    if(saved && Array.isArray(saved)){
+      userColors = saved;
+    }
+  }catch(e){
+    console.log("Nepodařilo se načíst vlastní barvy:", e);
+  }
+}
+
+async function saveUserColors(){
+  try{
+    await DB.ref('/ui_config/userColors').set(userColors);
+  }catch(e){
+    console.log("Nepodařilo se uložit vlastní barvy:", e);
+  }
+}
+
+function openColorPicker(){
+  let colorButtons = "";
+  userColors.forEach((c, idx) => {
+    colorButtons += `<div style="display:flex;flex-direction:column;gap:4px">
+      <button class="ascii-btn color-choice" data-index="${idx}" data-color="${c.hex}" style="min-width:100px;position:relative" title="Klikni pro výběr, pravý klik pro editaci">${c.name}</button>
+    </div>`;
+  });
+  
+  colorBox.innerHTML = `${makeFrame("VYBRAT BARVU")}
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0;max-width:450px">
+  ${colorButtons}
+</div>
+<div class="small-note" style="margin-bottom:10px">Levý klik = vybrat | Pravý klik = editovat</div>
+<div class="modal-buttons">
+  <button class="ascii-btn" id="colorCancel">Zrušit</button>
+</div>`;
+  
+  container.classList.add("blurred");
+  colorModal.style.display = "flex";
+  
+  document.querySelectorAll(".color-choice").forEach(btn => {
+    const idx = parseInt(btn.getAttribute("data-index"));
+    const color = btn.getAttribute("data-color");
+    
+    // Levý klik - výběr barvy
+    btn.onclick = () => {
+      document.getElementById("uiColorValue").value = color;
+      applyUIColor(color);
+      closeColorPicker();
+    };
+    
+    // Pravý klik - editace barvy
+    btn.oncontextmenu = (e) => {
+      e.preventDefault();
+      openColorEditor(idx);
+    };
+    
+    // Hover efekt - změna barvy tlačítka
+    btn.addEventListener("mouseover", function(){
+      this.style.background = color;
+      this.style.color = "#111";
+      this.style.borderColor = color;
+    });
+    btn.addEventListener("mouseout", function(){
+      this.style.background = "none";
+      this.style.color = "var(--accent)";
+      this.style.borderColor = "var(--accent)";
+    });
+  });
+  
+  document.getElementById("colorCancel").onclick = () => closeColorPicker();
+}
+
+function openColorEditor(index){
+  const currentColor = userColors[index];
+  
+  colorBox.innerHTML = `${makeFrame("UPRAVIT DLAŽDICI")}
+<div style="margin:15px 0">
+  <div style="margin-bottom:10px">Název:</div>
+  <input type="text" id="colorName" value="${currentColor.name}" maxlength="20" class="text-input" style="width:150px">
+  
+  <div style="margin:15px 0 10px 0">Barva (HEX):</div>
+  <input type="text" id="colorHex" value="${currentColor.hex}" maxlength="7" class="text-input" style="width:100px">
+  
+  <div style="margin-top:15px;padding:20px;border:1px dashed var(--accent);background:${currentColor.hex}" id="colorPreview"></div>
+</div>
+<div class="modal-buttons">
+  <button class="ascii-btn" id="colorSave">Uložit</button>
+  <button class="ascii-btn" id="colorBack">Zpět</button>
+</div>`;
+  
+  const hexInput = document.getElementById("colorHex");
+  const preview = document.getElementById("colorPreview");
+  
+  hexInput.addEventListener("input", function(){
+    if(/^#[0-9A-F]{6}$/i.test(this.value)){
+      preview.style.background = this.value;
+    }
+  });
+  
+  document.getElementById("colorSave").onclick = async () => {
+    const newName = document.getElementById("colorName").value.trim() || "Vlastní";
+    const newHex = document.getElementById("colorHex").value.trim();
+    
+    if(/^#[0-9A-F]{6}$/i.test(newHex)){
+      userColors[index] = { name: newName, hex: newHex };
+      await saveUserColors();
+      showToast("Barva uložena");
+      openColorPicker();
+    } else {
+      showToast("Neplatný HEX kód");
+    }
+  };
+  
+  document.getElementById("colorBack").onclick = () => openColorPicker();
+}
+
+function closeColorPicker(){
+  container.classList.remove("blurred");
+  colorModal.style.display = "none";
+}
+
+// Načtení vlastních barev při startu
+loadUserColors();
+
+document.getElementById("colorPickerBtn").addEventListener("click", openColorPicker);
+
 /* ========== intensity modal (s +/- tlačítky) ========== */
 const intensityModal = document.getElementById("intensityModal");
 const intensityBox = document.getElementById("intensityBox");
@@ -563,6 +747,8 @@ async function loadConfig(){
       document.getElementById("regenStyle").value = cfg.other.regenStyle || "vlak";
       document.getElementById("backlightEnabled").value = cfg.other.backlightEnabled || "on";
       document.getElementById("backlightColor").value = cfg.other.backlightColor || "green";
+      clockEnabled = cfg.other.clockEnabled !== undefined ? cfg.other.clockEnabled : true;
+      updatePowerBtn();
     }
     
     // Načteme UI nastavení
@@ -605,6 +791,7 @@ function gatherConfig(){
   other.backlightColor = document.getElementById("backlightColor").value;
   other.lockUIColor = document.getElementById("lockUIColor").value;
   other.uiColorValue = document.getElementById("uiColorValue").value || "#00ff88";
+  other.clockEnabled = clockEnabled;
 
   const config = { regen, light, other, lastModified: Date.now() };
   return config;
@@ -626,7 +813,11 @@ ${makeFrame("ZADAT HESLO")}
   authModal.style.display = "flex";
   document.getElementById("authOk").onclick = () => submitWithAuth();
   document.getElementById("authCancel").onclick = () => closeAuth(false);
-  document.getElementById("authPass").focus();
+  const passInput = document.getElementById("authPass");
+  passInput.addEventListener("keypress", (e) => {
+    if(e.key === "Enter") submitWithAuth();
+  });
+  passInput.focus();
 }
 
 function closeAuth(ok){
@@ -647,7 +838,8 @@ async function submitWithAuth(){
       regenDuration: config.other.regenDuration,
       regenStyle: config.other.regenStyle,
       backlightEnabled: config.other.backlightEnabled,
-      backlightColor: config.other.backlightColor
+      backlightColor: config.other.backlightColor,
+      clockEnabled: config.other.clockEnabled
     },
     lastModified: config.lastModified
   };
