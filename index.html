@@ -67,6 +67,14 @@ body{
     font-size:11px;
     overflow-x:auto;
   }
+  #colorBox, #fontBox, #effectsBox{
+    transform:scale(0.75);
+    max-width:90vw;
+  }
+  #colorBox > div, #fontBox > div{
+    grid-template-columns:repeat(2,1fr) !important;
+    gap:6px !important;
+  }
 }
 @media (max-width: 480px){
   .container{
@@ -91,8 +99,17 @@ body{
   pre{
     font-size:10px;
   }
-  #colorBox{
-    transform:scale(0.85);
+  #colorBox, #fontBox, #effectsBox{
+    transform:scale(0.65);
+    padding:15px 20px;
+  }
+  #colorBox > div[style*="grid"], #fontBox > div[style*="grid"]{
+    grid-template-columns:repeat(2,1fr) !important;
+    gap:4px !important;
+    max-width:100% !important;
+  }
+  .modal-buttons{
+    gap:10px !important;
   }
 }
 h1{text-align:center;border-bottom:1px dashed var(--accent);padding-bottom:8px;margin-bottom:15px}
@@ -150,8 +167,8 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
     max-width:85%;
   }
 }
-#authModal,#intensityModal,#timeModal,#colorModal,#effectsModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
-#authBox,#intensityBox,#timeBox,#colorBox,#effectsBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
+#authModal,#intensityModal,#timeModal,#colorModal,#effectsModal,#fontModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
+#authBox,#intensityBox,#timeBox,#colorBox,#effectsBox,#fontBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
 input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;color:var(--accent);font-family:var(--font-main)}
 .time-inputs{display:flex;justify-content:center;align-items:center;gap:15px;margin:15px 0;flex-direction:column}
 .time-row{display:flex;align-items:center;gap:10px}
@@ -219,6 +236,9 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
     <tr><td>Zvláštní efekty</td><td>
       <button class="ascii-btn" id="effectsBtn" style="padding:4px 12px">[ ★ Otevřít ]</button>
     </td></tr>
+    <tr><td>Font stránky</td><td>
+      <button class="ascii-btn" id="fontPickerBtn" style="padding:4px 12px">[ A Vybrat ]</button>
+    </td></tr>
   </table>
 
   <button id="saveBtn"></button>
@@ -230,6 +250,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 <div id="timeModal"><div id="timeBox"></div></div>
 <div id="colorModal"><div id="colorBox"></div></div>
 <div id="effectsModal"><div id="effectsBox"></div></div>
+<div id="fontModal"><div id="fontBox"></div></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -262,12 +283,15 @@ saveBtn.addEventListener("mouseover", ()=> saveBtn.textContent = makeFrame("+++ 
 saveBtn.addEventListener("mouseout", ()=> saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---"));
 const powerBtn = document.getElementById("powerBtn");
 let clockEnabled = true;
+let selectedFont = "Inconsolata";
 let activeEffects = {
   uiHueRotate: false,
   bgHueRotate: false,
   scanlines: false,
   scanlineThickness: 2,
-  scanlineSpeed: 5
+  scanlineSpeed: 5,
+  grain: false,
+  grainIntensity: 30
 };
 function updatePowerBtn(){
   if(clockEnabled){
@@ -595,6 +619,44 @@ function applyEffects(){
       }
     `;
     document.head.appendChild(style);
+  }
+  
+  // Grain (šum) efekt
+  if(activeEffects.grain){
+    const intensity = activeEffects.grainIntensity || 30;
+    const style = document.createElement('style');
+    style.id = 'grain-style';
+    style.textContent = `
+      @keyframes grainAnimation {
+        0%, 100% { transform: translate(0, 0); }
+        10% { transform: translate(-5%, -5%); }
+        20% { transform: translate(-10%, 5%); }
+        30% { transform: translate(5%, -10%); }
+        40% { transform: translate(-5%, 15%); }
+        50% { transform: translate(-10%, 5%); }
+        60% { transform: translate(15%, 0); }
+        70% { transform: translate(0, 10%); }
+        80% { transform: translate(-15%, 0); }
+        90% { transform: translate(10%, 5%); }
+      }
+      body::after {
+        content: "";
+        position: fixed;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: ${intensity / 100};
+        pointer-events: none;
+        z-index: 9998;
+        animation: grainAnimation 0.8s steps(10) infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  } else {
+    const grainStyle = document.getElementById('grain-style');
+    if(grainStyle) grainStyle.remove();
   }
 }
 
@@ -956,6 +1018,12 @@ const availableEffects = [
     name: "Scanlines", 
     type: "complex",
     description: "Retro CRT efekt - pohyblivé linky"
+  },
+  { 
+    id: "grain", 
+    name: "Grain (Šum)", 
+    type: "complex",
+    description: "Filmový zrnitý efekt - statický šum"
   }
 ];
 
@@ -974,7 +1042,9 @@ function openEffectsModal(){
 </div>`;
     } else if(effect.type === "complex"){
       const isActive = activeEffects[effect.id];
-      effectsHTML += `
+      
+      if(effect.id === "scanlines"){
+        effectsHTML += `
 <div style="margin:20px 0;padding:15px;border:1px dashed var(--accent)">
   <button class="ascii-btn effect-toggle" data-effect="${effect.id}" style="min-width:250px;margin-bottom:10px;${isActive ? 'background:var(--accent);color:#111' : ''}">
     ${isActive ? '✓' : '○'} ${effect.name}
@@ -984,22 +1054,38 @@ function openEffectsModal(){
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Tloušťka (px):</span>
     <button class="ascii-btn" onclick="adjustScanline('thickness', -1)">-</button>
-    <input type="text" id="scanlineThickness" value="${activeEffects.scanlineThickness}" readonly style="width:50px;text-align:center" class="text-input">
+    <input type="number" id="scanlineThickness" value="${activeEffects.scanlineThickness}" min="1" max="10" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('thickness', this.value)">
     <button class="ascii-btn" onclick="adjustScanline('thickness', 1)">+</button>
   </div>
   
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Rychlost (s):</span>
-    <button class="ascii-btn" onclick="adjustScanline('speed', -1)">-</button>
-    <input type="text" id="scanlineSpeed" value="${activeEffects.scanlineSpeed}" readonly style="width:50px;text-align:center" class="text-input">
-    <button class="ascii-btn" onclick="adjustScanline('speed', 1)">+</button>
+    <button class="ascii-btn" onclick="adjustScanline('speed', -0.5)">-</button>
+    <input type="number" id="scanlineSpeed" value="${activeEffects.scanlineSpeed}" min="0.1" max="20" step="0.1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('speed', this.value)">
+    <button class="ascii-btn" onclick="adjustScanline('speed', 0.5)">+</button>
   </div>
 </div>`;
+      } else if(effect.id === "grain"){
+        effectsHTML += `
+<div style="margin:20px 0;padding:15px;border:1px dashed var(--accent)">
+  <button class="ascii-btn effect-toggle" data-effect="${effect.id}" style="min-width:250px;margin-bottom:10px;${isActive ? 'background:var(--accent);color:#111' : ''}">
+    ${isActive ? '✓' : '○'} ${effect.name}
+  </button>
+  <div class="small-note" style="margin-bottom:10px">${effect.description}</div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Intenzita (%):</span>
+    <button class="ascii-btn" onclick="adjustGrain(-5)">-</button>
+    <input type="number" id="grainIntensity" value="${activeEffects.grainIntensity}" min="5" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue(this.value)">
+    <button class="ascii-btn" onclick="adjustGrain(5)">+</button>
+  </div>
+</div>`;
+      }
     }
   });
   
   effectsBox.innerHTML = `${makeFrame("ZVLÁŠTNÍ EFEKTY")}
-<div style="max-height:400px;overflow-y:auto;padding:10px">
+<div id="effectsContent" style="max-height:400px;overflow-y:auto;padding:10px">
   ${effectsHTML}
 </div>
 <div class="modal-buttons" style="margin-top:20px">
@@ -1010,13 +1096,22 @@ function openEffectsModal(){
   container.classList.add("blurred");
   effectsModal.style.display = "flex";
   
+  // Uložení pozice scrollu
+  const scrollContainer = document.getElementById("effectsContent");
+  const currentScroll = scrollContainer.scrollTop;
+  
   // Toggle handlery
   document.querySelectorAll(".effect-toggle").forEach(btn => {
     btn.onclick = function(){
       const effectId = this.getAttribute("data-effect");
+      const prevScroll = document.getElementById("effectsContent").scrollTop;
       activeEffects[effectId] = !activeEffects[effectId];
       applyEffects();
       openEffectsModal(); // Refresh
+      // Obnov pozici scrollu
+      setTimeout(() => {
+        document.getElementById("effectsContent").scrollTop = prevScroll;
+      }, 0);
     };
   });
   
@@ -1026,24 +1121,77 @@ function openEffectsModal(){
       bgHueRotate: false,
       scanlines: false,
       scanlineThickness: 2,
-      scanlineSpeed: 5
+      scanlineSpeed: 5,
+      grain: false,
+      grainIntensity: 30
     };
     applyEffects();
     openEffectsModal(); // Refresh
   };
   
   document.getElementById("effectsClose").onclick = () => closeEffectsModal();
+  
+  // Obnov scroll pozici po refresh
+  setTimeout(() => {
+    scrollContainer.scrollTop = currentScroll;
+  }, 0);
 }
 
 // Globální funkce pro úpravu scanline hodnot
 window.adjustScanline = function(type, delta){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
   if(type === 'thickness'){
     activeEffects.scanlineThickness = Math.max(1, Math.min(10, activeEffects.scanlineThickness + delta));
   } else if(type === 'speed'){
-    activeEffects.scanlineSpeed = Math.max(1, Math.min(20, activeEffects.scanlineSpeed + delta));
+    activeEffects.scanlineSpeed = Math.max(0.1, Math.min(20, parseFloat((activeEffects.scanlineSpeed + delta).toFixed(1))));
   }
   applyEffects();
-  openEffectsModal(); // Refresh
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
+};
+
+window.updateScanlineValue = function(type, value){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
+  if(type === 'thickness'){
+    activeEffects.scanlineThickness = Math.max(1, Math.min(10, parseInt(value) || 2));
+  } else if(type === 'speed'){
+    activeEffects.scanlineSpeed = Math.max(0.1, Math.min(20, parseFloat(value) || 5));
+  }
+  applyEffects();
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
+};
+
+window.adjustGrain = function(delta){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
+  activeEffects.grainIntensity = Math.max(5, Math.min(100, activeEffects.grainIntensity + delta));
+  applyEffects();
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
+};
+
+window.updateGrainValue = function(value){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
+  activeEffects.grainIntensity = Math.max(5, Math.min(100, parseInt(value) || 30));
+  applyEffects();
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
 };
 
 function closeEffectsModal(){
@@ -1052,6 +1200,89 @@ function closeEffectsModal(){
 }
 
 document.getElementById("effectsBtn").addEventListener("click", openEffectsModal);
+
+/* ========== font picker modal ========== */
+const fontModal = document.getElementById("fontModal");
+const fontBox = document.getElementById("fontBox");
+
+const availableFonts = [
+  { name: "Inconsolata", family: "'Inconsolata', monospace", url: "https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;600&display=swap" },
+  { name: "Courier New", family: "'Courier New', monospace", url: null },
+  { name: "JetBrains Mono", family: "'JetBrains Mono', monospace", url: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" },
+  { name: "Fira Code", family: "'Fira Code', monospace", url: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&display=swap" },
+  { name: "Source Code Pro", family: "'Source Code Pro', monospace", url: "https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&display=swap" },
+  { name: "IBM Plex Mono", family: "'IBM Plex Mono', monospace", url: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" },
+  { name: "Roboto Mono", family: "'Roboto Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600&display=swap" },
+  { name: "Space Mono", family: "'Space Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" },
+  { name: "Anonymous Pro", family: "'Anonymous Pro', monospace", url: "https://fonts.googleapis.com/css2?family=Anonymous+Pro:wght@400;700&display=swap" },
+  { name: "Ubuntu Mono", family: "'Ubuntu Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Ubuntu+Mono:wght@400;700&display=swap" },
+  { name: "VT323", family: "'VT323', monospace", url: "https://fonts.googleapis.com/css2?family=VT323&display=swap" },
+  { name: "Share Tech Mono", family: "'Share Tech Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" },
+  { name: "Overpass Mono", family: "'Overpass Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@400;600&display=swap" },
+  { name: "Major Mono", family: "'Major Mono Display', monospace", url: "https://fonts.googleapis.com/css2?family=Major+Mono+Display&display=swap" },
+  { name: "Azeret Mono", family: "'Azeret Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600&display=swap" }
+];
+
+function loadFont(fontUrl){
+  if(!fontUrl) return;
+  const existingLink = document.querySelector(`link[href="${fontUrl}"]`);
+  if(!existingLink){
+    const link = document.createElement('link');
+    link.href = fontUrl;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }
+}
+
+function applyFont(fontFamily){
+  document.documentElement.style.setProperty('--font-main', fontFamily);
+}
+
+function openFontPicker(){
+  let fontButtons = "";
+  availableFonts.forEach((font, idx) => {
+    const isSelected = selectedFont === font.name;
+    fontButtons += `<button class="ascii-btn font-choice" data-index="${idx}" style="min-width:140px;margin:4px;font-family:${font.family};${isSelected ? 'background:var(--accent);color:#111' : ''}">${font.name}</button>\n`;
+  });
+  
+  fontBox.innerHTML = `${makeFrame("VYBRAT FONT")}
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0;max-width:500px">
+  ${fontButtons}
+</div>
+<div class="modal-buttons">
+  <button class="ascii-btn" id="fontCancel">Zrušit</button>
+</div>`;
+  
+  container.classList.add("blurred");
+  fontModal.style.display = "flex";
+  
+  // Načtení všech fontů pro preview
+  availableFonts.forEach(font => {
+    if(font.url) loadFont(font.url);
+  });
+  
+  document.querySelectorAll(".font-choice").forEach(btn => {
+    const idx = parseInt(btn.getAttribute("data-index"));
+    const font = availableFonts[idx];
+    
+    btn.onclick = () => {
+      selectedFont = font.name;
+      if(font.url) loadFont(font.url);
+      applyFont(font.family);
+      closeFontPicker();
+      showToast("Font nastaven");
+    };
+  });
+  
+  document.getElementById("fontCancel").onclick = () => closeFontPicker();
+}
+
+function closeFontPicker(){
+  container.classList.remove("blurred");
+  fontModal.style.display = "none";
+}
+
+document.getElementById("fontPickerBtn").addEventListener("click", openFontPicker);
 
 /* ========== intensity modal (s +/- tlačítky) ========== */
 const intensityModal = document.getElementById("intensityModal");
@@ -1182,6 +1413,15 @@ async function loadConfig(){
       activeEffects = uiCfg.activeEffects;
     }
     
+    if(uiCfg.selectedFont){
+      selectedFont = uiCfg.selectedFont;
+      const font = availableFonts.find(f => f.name === selectedFont);
+      if(font){
+        if(font.url) loadFont(font.url);
+        applyFont(font.family);
+      }
+    }
+    
     // Zobraz/skryj řádky
     toggleBacklightColorRow();
     toggleUIColorRow();
@@ -1223,6 +1463,7 @@ function gatherConfig(){
   other.bgColorValue = document.getElementById("bgColorValue").value || "#0c0c0c";
   other.activeEffects = activeEffects;
   other.clockEnabled = clockEnabled;
+  other.selectedFont = selectedFont;
 
   const config = { regen, light, other, lastModified: Date.now() };
   return config;
@@ -1281,7 +1522,8 @@ async function submitWithAuth(){
     uiColorValue: config.other.uiColorValue,
     lockBgColor: config.other.lockBgColor,
     bgColorValue: config.other.bgColorValue,
-    activeEffects: config.other.activeEffects
+    activeEffects: config.other.activeEffects,
+    selectedFont: config.other.selectedFont
   };
   
   try{
