@@ -296,7 +296,10 @@ let activeEffects = {
   glow: false,
   glowIntensity: 10,
   glowRadius: 5,
-  glowOpacity: 80
+  glowOpacity: 80,
+  vhs: false,
+  vhsColorShift: 3,
+  vhsGlitchIntensity: 30
 };
 function updatePowerBtn(){
   if(clockEnabled){
@@ -704,6 +707,68 @@ function applyEffects(){
     const glowStyle = document.getElementById('glow-style');
     if(glowStyle) glowStyle.remove();
   }
+  
+  // VHS efekt
+  if(activeEffects.vhs){
+    const colorShift = activeEffects.vhsColorShift || 3;
+    const glitchIntensity = activeEffects.vhsGlitchIntensity || 30;
+    
+    const style = document.createElement('style');
+    style.id = 'vhs-style';
+    style.textContent = `
+      @keyframes vhsGlitch {
+        0%, 100% { 
+          clip-path: inset(0 0 0 0);
+          transform: translateX(0);
+        }
+        5% { 
+          clip-path: inset(${Math.random() * 30}% 0 ${Math.random() * 30}% 0);
+          transform: translateX(${colorShift}px);
+        }
+        10% { 
+          clip-path: inset(0 0 0 0);
+          transform: translateX(-${colorShift}px);
+        }
+      }
+      
+      @keyframes vhsColorSplit {
+        0%, 100% { filter: none; }
+        25% { filter: hue-rotate(${colorShift * 2}deg); }
+        50% { filter: hue-rotate(-${colorShift * 2}deg); }
+        75% { filter: hue-rotate(${colorShift}deg); }
+      }
+      
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: 
+          repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.05),
+            rgba(0, 0, 0, 0.05) 2px,
+            transparent 2px,
+            transparent 4px
+          );
+        pointer-events: none;
+        z-index: 9997;
+        animation: ${glitchIntensity > 0 ? `vhsGlitch ${10 / (glitchIntensity / 30)}s infinite` : 'none'};
+        opacity: ${glitchIntensity / 100};
+      }
+      
+      h1, pre, table, th, td, button {
+        animation: ${colorShift > 0 ? `vhsColorSplit 2s infinite` : 'none'};
+        text-shadow: ${colorShift > 0 ? `${colorShift * 0.5}px 0 red, -${colorShift * 0.5}px 0 cyan` : 'none'};
+      }
+    `;
+    document.head.appendChild(style);
+  } else {
+    const vhsStyle = document.getElementById('vhs-style');
+    if(vhsStyle) vhsStyle.remove();
+  }
 }
 
 function applyCurrentColor(){
@@ -1078,6 +1143,12 @@ const availableEffects = [
     name: "Text Glow", 
     type: "complex",
     description: "Světelný efekt kolem textu"
+  },
+  { 
+    id: "vhs", 
+    name: "VHS Efekt", 
+    type: "complex",
+    description: "Retro VHS kazeta - distorze a glitche"
   }
 ];
 
@@ -1108,14 +1179,14 @@ function openEffectsModal(){
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Tloušťka (px):</span>
     <button class="ascii-btn" onclick="adjustScanline('thickness', -1)">-</button>
-    <input type="number" id="scanlineThickness" value="${activeEffects.scanlineThickness || 2}" min="1" max="10" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('thickness', this.value)">
+    <input type="number" id="scanlineThickness" value="${activeEffects.scanlineThickness || 2}" min="0" max="10" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('thickness', this.value)">
     <button class="ascii-btn" onclick="adjustScanline('thickness', 1)">+</button>
   </div>
   
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Rychlost (s):</span>
     <button class="ascii-btn" onclick="adjustScanline('speed', -0.5)">-</button>
-    <input type="number" id="scanlineSpeed" value="${activeEffects.scanlineSpeed || 5}" min="0.1" max="20" step="0.1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('speed', this.value)">
+    <input type="number" id="scanlineSpeed" value="${activeEffects.scanlineSpeed || 5}" min="0" max="20" step="0.1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('speed', this.value)">
     <button class="ascii-btn" onclick="adjustScanline('speed', 0.5)">+</button>
   </div>
 </div>`;
@@ -1130,14 +1201,14 @@ function openEffectsModal(){
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Intenzita (%):</span>
     <button class="ascii-btn" onclick="adjustGrain('intensity', -5)">-</button>
-    <input type="number" id="grainIntensity" value="${activeEffects.grainIntensity || 30}" min="5" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue('intensity', this.value)">
+    <input type="number" id="grainIntensity" value="${activeEffects.grainIntensity || 30}" min="0" max="100" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue('intensity', this.value)">
     <button class="ascii-btn" onclick="adjustGrain('intensity', 5)">+</button>
   </div>
   
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Opacity (%):</span>
     <button class="ascii-btn" onclick="adjustGrain('opacity', -5)">-</button>
-    <input type="number" id="grainOpacity" value="${activeEffects.grainOpacity || 30}" min="5" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue('opacity', this.value)">
+    <input type="number" id="grainOpacity" value="${activeEffects.grainOpacity || 30}" min="0" max="100" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue('opacity', this.value)">
     <button class="ascii-btn" onclick="adjustGrain('opacity', 5)">+</button>
   </div>
 </div>`;
@@ -1152,22 +1223,44 @@ function openEffectsModal(){
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Intenzita:</span>
     <button class="ascii-btn" onclick="adjustGlow('intensity', -2)">-</button>
-    <input type="number" id="glowIntensity" value="${activeEffects.glowIntensity || 10}" min="1" max="50" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('intensity', this.value)">
+    <input type="number" id="glowIntensity" value="${activeEffects.glowIntensity || 10}" min="0" max="50" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('intensity', this.value)">
     <button class="ascii-btn" onclick="adjustGlow('intensity', 2)">+</button>
   </div>
   
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Dosah (px):</span>
     <button class="ascii-btn" onclick="adjustGlow('radius', -1)">-</button>
-    <input type="number" id="glowRadius" value="${activeEffects.glowRadius || 5}" min="1" max="30" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('radius', this.value)">
+    <input type="number" id="glowRadius" value="${activeEffects.glowRadius || 5}" min="0" max="30" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('radius', this.value)">
     <button class="ascii-btn" onclick="adjustGlow('radius', 1)">+</button>
   </div>
   
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Opacity (%):</span>
     <button class="ascii-btn" onclick="adjustGlow('opacity', -5)">-</button>
-    <input type="number" id="glowOpacity" value="${activeEffects.glowOpacity || 80}" min="10" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('opacity', this.value)">
+    <input type="number" id="glowOpacity" value="${activeEffects.glowOpacity || 80}" min="0" max="100" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('opacity', this.value)">
     <button class="ascii-btn" onclick="adjustGlow('opacity', 5)">+</button>
+  </div>
+</div>`;
+      } else if(effect.id === "vhs"){
+        effectsHTML += `
+<div style="margin:20px 0;padding:15px;border:1px dashed var(--accent)">
+  <button class="ascii-btn effect-toggle" data-effect="${effect.id}" style="min-width:250px;margin-bottom:10px;${isActive ? 'background:var(--accent);color:#111' : ''}">
+    ${isActive ? '✓' : '○'} ${effect.name}
+  </button>
+  <div class="small-note" style="margin-bottom:10px">${effect.description}</div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Posun barev:</span>
+    <button class="ascii-btn" onclick="adjustVHS('colorShift', -1)">-</button>
+    <input type="number" id="vhsColorShift" value="${activeEffects.vhsColorShift || 3}" min="0" max="10" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateVHSValue('colorShift', this.value)">
+    <button class="ascii-btn" onclick="adjustVHS('colorShift', 1)">+</button>
+  </div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Glitch (%):</span>
+    <button class="ascii-btn" onclick="adjustVHS('glitch', -5)">-</button>
+    <input type="number" id="vhsGlitchIntensity" value="${activeEffects.vhsGlitchIntensity || 30}" min="0" max="100" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateVHSValue('glitch', this.value)">
+    <button class="ascii-btn" onclick="adjustVHS('glitch', 5)">+</button>
   </div>
 </div>`;
       }
@@ -1219,7 +1312,10 @@ function openEffectsModal(){
       glow: false,
       glowIntensity: 10,
       glowRadius: 5,
-      glowOpacity: 80
+      glowOpacity: 80,
+      vhs: false,
+      vhsColorShift: 3,
+      vhsGlitchIntensity: 30
     };
     applyEffects();
     openEffectsModal(); // Refresh
@@ -1237,9 +1333,9 @@ function openEffectsModal(){
 window.adjustScanline = function(type, delta){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
   if(type === 'thickness'){
-    activeEffects.scanlineThickness = Math.max(1, Math.min(10, activeEffects.scanlineThickness + delta));
+    activeEffects.scanlineThickness = Math.max(0, Math.min(10, activeEffects.scanlineThickness + delta));
   } else if(type === 'speed'){
-    activeEffects.scanlineSpeed = Math.max(0.1, Math.min(20, parseFloat((activeEffects.scanlineSpeed + delta).toFixed(1))));
+    activeEffects.scanlineSpeed = Math.max(0, Math.min(20, parseFloat((activeEffects.scanlineSpeed + delta).toFixed(1))));
   }
   applyEffects();
   openEffectsModal();
@@ -1253,9 +1349,9 @@ window.adjustScanline = function(type, delta){
 window.updateScanlineValue = function(type, value){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
   if(type === 'thickness'){
-    activeEffects.scanlineThickness = Math.max(1, Math.min(10, parseInt(value) || 2));
+    activeEffects.scanlineThickness = Math.max(0, Math.min(10, parseInt(value) || 2));
   } else if(type === 'speed'){
-    activeEffects.scanlineSpeed = Math.max(0.1, Math.min(20, parseFloat(value) || 5));
+    activeEffects.scanlineSpeed = Math.max(0, Math.min(20, parseFloat(value) || 5));
   }
   applyEffects();
   openEffectsModal();
@@ -1269,9 +1365,9 @@ window.updateScanlineValue = function(type, value){
 window.adjustGrain = function(type, delta){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
   if(type === 'intensity'){
-    activeEffects.grainIntensity = Math.max(5, Math.min(100, activeEffects.grainIntensity + delta));
+    activeEffects.grainIntensity = Math.max(0, Math.min(100, activeEffects.grainIntensity + delta));
   } else if(type === 'opacity'){
-    activeEffects.grainOpacity = Math.max(5, Math.min(100, activeEffects.grainOpacity + delta));
+    activeEffects.grainOpacity = Math.max(0, Math.min(100, activeEffects.grainOpacity + delta));
   }
   applyEffects();
   openEffectsModal();
@@ -1285,9 +1381,9 @@ window.adjustGrain = function(type, delta){
 window.updateGrainValue = function(type, value){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
   if(type === 'intensity'){
-    activeEffects.grainIntensity = Math.max(5, Math.min(100, parseInt(value) || 30));
+    activeEffects.grainIntensity = Math.max(0, Math.min(100, parseInt(value) || 30));
   } else if(type === 'opacity'){
-    activeEffects.grainOpacity = Math.max(5, Math.min(100, parseInt(value) || 30));
+    activeEffects.grainOpacity = Math.max(0, Math.min(100, parseInt(value) || 30));
   }
   applyEffects();
   openEffectsModal();
@@ -1301,11 +1397,11 @@ window.updateGrainValue = function(type, value){
 window.adjustGlow = function(type, delta){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
   if(type === 'intensity'){
-    activeEffects.glowIntensity = Math.max(1, Math.min(50, activeEffects.glowIntensity + delta));
+    activeEffects.glowIntensity = Math.max(0, Math.min(50, activeEffects.glowIntensity + delta));
   } else if(type === 'radius'){
-    activeEffects.glowRadius = Math.max(1, Math.min(30, activeEffects.glowRadius + delta));
+    activeEffects.glowRadius = Math.max(0, Math.min(30, activeEffects.glowRadius + delta));
   } else if(type === 'opacity'){
-    activeEffects.glowOpacity = Math.max(10, Math.min(100, activeEffects.glowOpacity + delta));
+    activeEffects.glowOpacity = Math.max(0, Math.min(100, activeEffects.glowOpacity + delta));
   }
   applyEffects();
   openEffectsModal();
@@ -1319,11 +1415,43 @@ window.adjustGlow = function(type, delta){
 window.updateGlowValue = function(type, value){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
   if(type === 'intensity'){
-    activeEffects.glowIntensity = Math.max(1, Math.min(50, parseInt(value) || 10));
+    activeEffects.glowIntensity = Math.max(0, Math.min(50, parseInt(value) || 10));
   } else if(type === 'radius'){
-    activeEffects.glowRadius = Math.max(1, Math.min(30, parseInt(value) || 5));
+    activeEffects.glowRadius = Math.max(0, Math.min(30, parseInt(value) || 5));
   } else if(type === 'opacity'){
-    activeEffects.glowOpacity = Math.max(10, Math.min(100, parseInt(value) || 80));
+    activeEffects.glowOpacity = Math.max(0, Math.min(100, parseInt(value) || 80));
+  }
+  applyEffects();
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
+};
+
+window.adjustVHS = function(type, delta){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
+  if(type === 'colorShift'){
+    activeEffects.vhsColorShift = Math.max(0, Math.min(10, activeEffects.vhsColorShift + delta));
+  } else if(type === 'glitch'){
+    activeEffects.vhsGlitchIntensity = Math.max(0, Math.min(100, activeEffects.vhsGlitchIntensity + delta));
+  }
+  applyEffects();
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
+};
+
+window.updateVHSValue = function(type, value){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
+  if(type === 'colorShift'){
+    activeEffects.vhsColorShift = Math.max(0, Math.min(10, parseInt(value) || 3));
+  } else if(type === 'glitch'){
+    activeEffects.vhsGlitchIntensity = Math.max(0, Math.min(100, parseInt(value) || 30));
   }
   applyEffects();
   openEffectsModal();
@@ -1451,29 +1579,92 @@ function openFontEditor(index){
   
   fontBox.innerHTML = `${makeFrame("UPRAVIT FONT")}
 <div style="margin:15px 0;text-align:left;max-width:400px">
-  <div style="margin-bottom:10px">Název fontu:</div>
+  <div style="margin-bottom:10px">Google Fonts URL:</div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <input type="text" id="fontUrl" value="${currentFont.url || ''}" placeholder="https://fonts.googleapis.com/..." class="text-input" style="flex:1;max-width:300px">
+    <button class="ascii-btn" id="parseFontBtn" style="padding:4px 12px">[ ↓ Načíst ]</button>
+  </div>
+  <div class="small-note">Vložte URL z fonts.google.com a klikněte na Načíst</div>
+  
+  <div style="margin:15px 0 10px 0">Název fontu:</div>
   <input type="text" id="fontName" value="${currentFont.name}" maxlength="30" class="text-input" style="width:200px">
   
   <div style="margin:15px 0 10px 0">Font Family:</div>
   <input type="text" id="fontFamily" value="${currentFont.family}" class="text-input" style="width:250px">
   
-  <div style="margin:15px 0 10px 0">Google Fonts URL (volitelné):</div>
-  <input type="text" id="fontUrl" value="${currentFont.url || ''}" placeholder="https://fonts.googleapis.com/..." class="text-input" style="width:100%;max-width:350px">
-  
-  <div style="margin-top:15px;padding:15px;border:1px dashed var(--accent);font-family:${currentFont.family}">
-    Preview textu: 0123456789
+  <div id="fontPreview" style="margin-top:15px;padding:15px;border:1px dashed var(--accent);font-family:${currentFont.family};min-height:50px">
+    Preview textu: 0123456789 AaBbCc
   </div>
-  <div class="small-note">Tip: Najdi monofonty na fonts.google.com/?category=Monospace</div>
 </div>
 <div class="modal-buttons">
   <button class="ascii-btn" id="fontSave">Uložit</button>
   <button class="ascii-btn" id="fontBack">Zpět</button>
 </div>`;
   
+  const urlInput = document.getElementById("fontUrl");
+  const nameInput = document.getElementById("fontName");
+  const familyInput = document.getElementById("fontFamily");
+  const preview = document.getElementById("fontPreview");
+  const parseBtn = document.getElementById("parseFontBtn");
+  
+  // Funkce pro parsování Google Fonts URL
+  function parseGoogleFontsUrl(url){
+    try {
+      // Extrakce názvu fontu z URL
+      // Formát: https://fonts.googleapis.com/css2?family=Font+Name:wght@...
+      const match = url.match(/family=([^:&]+)/);
+      if(match){
+        const fontName = match[1].replace(/\+/g, ' ');
+        const fontFamily = `'${fontName}', monospace`;
+        return { name: fontName, family: fontFamily };
+      }
+    } catch(e) {
+      console.error("Chyba při parsování URL:", e);
+    }
+    return null;
+  }
+  
+  // Kliknutí na tlačítko "Načíst"
+  parseBtn.onclick = function(){
+    const url = urlInput.value.trim();
+    if(!url){
+      showToast("Vložte URL fontu");
+      return;
+    }
+    
+    if(!url.includes("fonts.googleapis.com")){
+      showToast("Neplatné Google Fonts URL");
+      return;
+    }
+    
+    const parsed = parseGoogleFontsUrl(url);
+    if(parsed){
+      nameInput.value = parsed.name;
+      familyInput.value = parsed.family;
+      
+      // Načtení fontu pro preview
+      loadFont(url);
+      
+      // Aktualizace preview s mírným zpožděním pro načtení fontu
+      setTimeout(() => {
+        preview.style.fontFamily = parsed.family;
+      }, 500);
+      
+      showToast("Font načten!");
+    } else {
+      showToast("Nepodařilo se načíst font");
+    }
+  };
+  
+  // Live update preview při změně font-family
+  familyInput.addEventListener("input", function(){
+    preview.style.fontFamily = this.value;
+  });
+  
   document.getElementById("fontSave").onclick = async () => {
-    const newName = document.getElementById("fontName").value.trim() || "Custom Font";
-    const newFamily = document.getElementById("fontFamily").value.trim();
-    const newUrl = document.getElementById("fontUrl").value.trim() || null;
+    const newName = nameInput.value.trim() || "Custom Font";
+    const newFamily = familyInput.value.trim();
+    const newUrl = urlInput.value.trim() || null;
     
     if(newFamily){
       userFonts[index] = { name: newName, family: newFamily, url: newUrl };
