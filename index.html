@@ -167,8 +167,8 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
     max-width:85%;
   }
 }
-#authModal,#intensityModal,#timeModal,#colorModal,#effectsModal,#fontModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
-#authBox,#intensityBox,#timeBox,#colorBox,#effectsBox,#fontBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
+#authModal,#intensityModal,#timeModal,#colorModal,#effectsModal,#fontModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000;overflow:auto}
+#authBox,#intensityBox,#timeBox,#colorBox,#effectsBox,#fontBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale));margin:auto;position:relative}
 input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;color:var(--accent);font-family:var(--font-main)}
 .time-inputs{display:flex;justify-content:center;align-items:center;gap:15px;margin:15px 0;flex-direction:column}
 .time-row{display:flex;align-items:center;gap:10px}
@@ -291,7 +291,12 @@ let activeEffects = {
   scanlineThickness: 2,
   scanlineSpeed: 5,
   grain: false,
-  grainIntensity: 30
+  grainIntensity: 30,
+  grainOpacity: 30,
+  glow: false,
+  glowIntensity: 10,
+  glowRadius: 5,
+  glowOpacity: 80
 };
 function updatePowerBtn(){
   if(clockEnabled){
@@ -421,6 +426,7 @@ function openTimePicker(input){
   const [h,m] = val.split(":");
   renderTimeBox(h||"hh", m||"mm");
   container.classList.add("blurred");
+  document.body.style.overflow = "hidden";
   timeModal.style.display = "flex";
 }
 
@@ -431,6 +437,7 @@ function closeTimePicker(apply=false){
     activeInput.value = `${h}:${m}`;
   }
   container.classList.remove("blurred");
+  document.body.style.overflow = "";
   timeModal.style.display = "none";
 }
 
@@ -529,6 +536,16 @@ function getContrastColor(bgHex){
   return luminance > 128 ? '#111111' : '#ffffff';
 }
 
+// Funkce pro převod HEX na RGB
+function hexToRgb(hex){
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
 function applyBgColor(color){
   if(/^#[0-9A-F]{6}$/i.test(color)){
     document.body.style.background = color;
@@ -624,6 +641,7 @@ function applyEffects(){
   // Grain (šum) efekt
   if(activeEffects.grain){
     const intensity = activeEffects.grainIntensity || 30;
+    const opacity = activeEffects.grainOpacity || 30;
     const style = document.createElement('style');
     style.id = 'grain-style';
     style.textContent = `
@@ -646,8 +664,8 @@ function applyEffects(){
         left: -50%;
         width: 200%;
         height: 200%;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-        opacity: ${intensity / 100};
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='${intensity / 50}' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: ${opacity / 100};
         pointer-events: none;
         z-index: 9998;
         animation: grainAnimation 0.8s steps(10) infinite;
@@ -657,6 +675,34 @@ function applyEffects(){
   } else {
     const grainStyle = document.getElementById('grain-style');
     if(grainStyle) grainStyle.remove();
+  }
+  
+  // Glow efekt
+  if(activeEffects.glow){
+    const intensity = activeEffects.glowIntensity || 10;
+    const radius = activeEffects.glowRadius || 5;
+    const opacity = activeEffects.glowOpacity || 80;
+    const style = document.createElement('style');
+    style.id = 'glow-style';
+    style.textContent = `
+      h1, pre, table, th, td, input, select, button, #toast, label, span {
+        text-shadow: 
+          0 0 ${radius}px rgba(var(--accent-rgb), ${opacity / 100}),
+          0 0 ${radius * 2}px rgba(var(--accent-rgb), ${opacity / 200}),
+          0 0 ${radius * 3}px rgba(var(--accent-rgb), ${opacity / 300});
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Převést accent barvu na RGB pro text-shadow
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const rgb = hexToRgb(accentColor);
+    if(rgb){
+      document.documentElement.style.setProperty('--accent-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+    }
+  } else {
+    const glowStyle = document.getElementById('glow-style');
+    if(glowStyle) glowStyle.remove();
   }
 }
 
@@ -770,6 +816,7 @@ function openColorPicker(){
 </div>`;
   
   container.classList.add("blurred");
+  document.body.style.overflow = "hidden";
   colorModal.style.display = "flex";
   
   document.querySelectorAll(".color-choice").forEach(btn => {
@@ -851,6 +898,7 @@ function openColorEditor(index){
 
 function closeColorPicker(){
   container.classList.remove("blurred");
+  document.body.style.overflow = "";
   colorModal.style.display = "none";
 }
 
@@ -1024,6 +1072,12 @@ const availableEffects = [
     name: "Grain (Šum)", 
     type: "complex",
     description: "Filmový zrnitý efekt - statický šum"
+  },
+  { 
+    id: "glow", 
+    name: "Text Glow", 
+    type: "complex",
+    description: "Světelný efekt kolem textu"
   }
 ];
 
@@ -1054,14 +1108,14 @@ function openEffectsModal(){
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Tloušťka (px):</span>
     <button class="ascii-btn" onclick="adjustScanline('thickness', -1)">-</button>
-    <input type="number" id="scanlineThickness" value="${activeEffects.scanlineThickness}" min="1" max="10" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('thickness', this.value)">
+    <input type="number" id="scanlineThickness" value="${activeEffects.scanlineThickness || 2}" min="1" max="10" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('thickness', this.value)">
     <button class="ascii-btn" onclick="adjustScanline('thickness', 1)">+</button>
   </div>
   
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Rychlost (s):</span>
     <button class="ascii-btn" onclick="adjustScanline('speed', -0.5)">-</button>
-    <input type="number" id="scanlineSpeed" value="${activeEffects.scanlineSpeed}" min="0.1" max="20" step="0.1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('speed', this.value)">
+    <input type="number" id="scanlineSpeed" value="${activeEffects.scanlineSpeed || 5}" min="0.1" max="20" step="0.1" style="width:50px;text-align:center" class="text-input" onchange="updateScanlineValue('speed', this.value)">
     <button class="ascii-btn" onclick="adjustScanline('speed', 0.5)">+</button>
   </div>
 </div>`;
@@ -1075,9 +1129,45 @@ function openEffectsModal(){
   
   <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
     <span style="min-width:120px;text-align:right">Intenzita (%):</span>
-    <button class="ascii-btn" onclick="adjustGrain(-5)">-</button>
-    <input type="number" id="grainIntensity" value="${activeEffects.grainIntensity}" min="5" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue(this.value)">
-    <button class="ascii-btn" onclick="adjustGrain(5)">+</button>
+    <button class="ascii-btn" onclick="adjustGrain('intensity', -5)">-</button>
+    <input type="number" id="grainIntensity" value="${activeEffects.grainIntensity || 30}" min="5" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue('intensity', this.value)">
+    <button class="ascii-btn" onclick="adjustGrain('intensity', 5)">+</button>
+  </div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Opacity (%):</span>
+    <button class="ascii-btn" onclick="adjustGrain('opacity', -5)">-</button>
+    <input type="number" id="grainOpacity" value="${activeEffects.grainOpacity || 30}" min="5" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGrainValue('opacity', this.value)">
+    <button class="ascii-btn" onclick="adjustGrain('opacity', 5)">+</button>
+  </div>
+</div>`;
+      } else if(effect.id === "glow"){
+        effectsHTML += `
+<div style="margin:20px 0;padding:15px;border:1px dashed var(--accent)">
+  <button class="ascii-btn effect-toggle" data-effect="${effect.id}" style="min-width:250px;margin-bottom:10px;${isActive ? 'background:var(--accent);color:#111' : ''}">
+    ${isActive ? '✓' : '○'} ${effect.name}
+  </button>
+  <div class="small-note" style="margin-bottom:10px">${effect.description}</div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Intenzita:</span>
+    <button class="ascii-btn" onclick="adjustGlow('intensity', -2)">-</button>
+    <input type="number" id="glowIntensity" value="${activeEffects.glowIntensity || 10}" min="1" max="50" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('intensity', this.value)">
+    <button class="ascii-btn" onclick="adjustGlow('intensity', 2)">+</button>
+  </div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Dosah (px):</span>
+    <button class="ascii-btn" onclick="adjustGlow('radius', -1)">-</button>
+    <input type="number" id="glowRadius" value="${activeEffects.glowRadius || 5}" min="1" max="30" step="1" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('radius', this.value)">
+    <button class="ascii-btn" onclick="adjustGlow('radius', 1)">+</button>
+  </div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Opacity (%):</span>
+    <button class="ascii-btn" onclick="adjustGlow('opacity', -5)">-</button>
+    <input type="number" id="glowOpacity" value="${activeEffects.glowOpacity || 80}" min="10" max="100" step="5" style="width:50px;text-align:center" class="text-input" onchange="updateGlowValue('opacity', this.value)">
+    <button class="ascii-btn" onclick="adjustGlow('opacity', 5)">+</button>
   </div>
 </div>`;
       }
@@ -1094,6 +1184,7 @@ function openEffectsModal(){
 </div>`;
   
   container.classList.add("blurred");
+  document.body.style.overflow = "hidden";
   effectsModal.style.display = "flex";
   
   // Uložení pozice scrollu
@@ -1123,7 +1214,12 @@ function openEffectsModal(){
       scanlineThickness: 2,
       scanlineSpeed: 5,
       grain: false,
-      grainIntensity: 30
+      grainIntensity: 30,
+      grainOpacity: 30,
+      glow: false,
+      glowIntensity: 10,
+      glowRadius: 5,
+      glowOpacity: 80
     };
     applyEffects();
     openEffectsModal(); // Refresh
@@ -1170,9 +1266,13 @@ window.updateScanlineValue = function(type, value){
   }, 0);
 };
 
-window.adjustGrain = function(delta){
+window.adjustGrain = function(type, delta){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
-  activeEffects.grainIntensity = Math.max(5, Math.min(100, activeEffects.grainIntensity + delta));
+  if(type === 'intensity'){
+    activeEffects.grainIntensity = Math.max(5, Math.min(100, activeEffects.grainIntensity + delta));
+  } else if(type === 'opacity'){
+    activeEffects.grainOpacity = Math.max(5, Math.min(100, activeEffects.grainOpacity + delta));
+  }
   applyEffects();
   openEffectsModal();
   setTimeout(() => {
@@ -1182,9 +1282,49 @@ window.adjustGrain = function(delta){
   }, 0);
 };
 
-window.updateGrainValue = function(value){
+window.updateGrainValue = function(type, value){
   const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
-  activeEffects.grainIntensity = Math.max(5, Math.min(100, parseInt(value) || 30));
+  if(type === 'intensity'){
+    activeEffects.grainIntensity = Math.max(5, Math.min(100, parseInt(value) || 30));
+  } else if(type === 'opacity'){
+    activeEffects.grainOpacity = Math.max(5, Math.min(100, parseInt(value) || 30));
+  }
+  applyEffects();
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
+};
+
+window.adjustGlow = function(type, delta){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
+  if(type === 'intensity'){
+    activeEffects.glowIntensity = Math.max(1, Math.min(50, activeEffects.glowIntensity + delta));
+  } else if(type === 'radius'){
+    activeEffects.glowRadius = Math.max(1, Math.min(30, activeEffects.glowRadius + delta));
+  } else if(type === 'opacity'){
+    activeEffects.glowOpacity = Math.max(10, Math.min(100, activeEffects.glowOpacity + delta));
+  }
+  applyEffects();
+  openEffectsModal();
+  setTimeout(() => {
+    if(document.getElementById("effectsContent")){
+      document.getElementById("effectsContent").scrollTop = scrollPos;
+    }
+  }, 0);
+};
+
+window.updateGlowValue = function(type, value){
+  const scrollPos = document.getElementById("effectsContent")?.scrollTop || 0;
+  if(type === 'intensity'){
+    activeEffects.glowIntensity = Math.max(1, Math.min(50, parseInt(value) || 10));
+  } else if(type === 'radius'){
+    activeEffects.glowRadius = Math.max(1, Math.min(30, parseInt(value) || 5));
+  } else if(type === 'opacity'){
+    activeEffects.glowOpacity = Math.max(10, Math.min(100, parseInt(value) || 80));
+  }
   applyEffects();
   openEffectsModal();
   setTimeout(() => {
@@ -1196,6 +1336,7 @@ window.updateGrainValue = function(value){
 
 function closeEffectsModal(){
   container.classList.remove("blurred");
+  document.body.style.overflow = "";
   effectsModal.style.display = "none";
 }
 
@@ -1205,23 +1346,43 @@ document.getElementById("effectsBtn").addEventListener("click", openEffectsModal
 const fontModal = document.getElementById("fontModal");
 const fontBox = document.getElementById("fontBox");
 
-const availableFonts = [
+let userFonts = [
   { name: "Inconsolata", family: "'Inconsolata', monospace", url: "https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;600&display=swap" },
-  { name: "Courier New", family: "'Courier New', monospace", url: null },
   { name: "JetBrains Mono", family: "'JetBrains Mono', monospace", url: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" },
   { name: "Fira Code", family: "'Fira Code', monospace", url: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&display=swap" },
   { name: "Source Code Pro", family: "'Source Code Pro', monospace", url: "https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&display=swap" },
   { name: "IBM Plex Mono", family: "'IBM Plex Mono', monospace", url: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" },
   { name: "Roboto Mono", family: "'Roboto Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600&display=swap" },
   { name: "Space Mono", family: "'Space Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" },
-  { name: "Anonymous Pro", family: "'Anonymous Pro', monospace", url: "https://fonts.googleapis.com/css2?family=Anonymous+Pro:wght@400;700&display=swap" },
   { name: "Ubuntu Mono", family: "'Ubuntu Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Ubuntu+Mono:wght@400;700&display=swap" },
+  { name: "Courier Prime", family: "'Courier Prime', monospace", url: "https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" },
+  { name: "Anonymous Pro", family: "'Anonymous Pro', monospace", url: "https://fonts.googleapis.com/css2?family=Anonymous+Pro:wght@400;700&display=swap" },
   { name: "VT323", family: "'VT323', monospace", url: "https://fonts.googleapis.com/css2?family=VT323&display=swap" },
   { name: "Share Tech Mono", family: "'Share Tech Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" },
   { name: "Overpass Mono", family: "'Overpass Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@400;600&display=swap" },
-  { name: "Major Mono", family: "'Major Mono Display', monospace", url: "https://fonts.googleapis.com/css2?family=Major+Mono+Display&display=swap" },
-  { name: "Azeret Mono", family: "'Azeret Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600&display=swap" }
+  { name: "Red Hat Mono", family: "'Red Hat Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@400;600&display=swap" },
+  { name: "Noto Sans Mono", family: "'Noto Sans Mono', monospace", url: "https://fonts.googleapis.com/css2?family=Noto+Sans+Mono:wght@400;600&display=swap" }
 ];
+
+async function loadUserFonts(){
+  try{
+    const snap = await DB.ref('/ui_config/userFonts').once('value');
+    const saved = snap.val();
+    if(saved && Array.isArray(saved)){
+      userFonts = saved;
+    }
+  }catch(e){
+    console.log("Nepodařilo se načíst vlastní fonty:", e);
+  }
+}
+
+async function saveUserFonts(){
+  try{
+    await DB.ref('/ui_config/userFonts').set(userFonts);
+  }catch(e){
+    console.log("Nepodařilo se uložit vlastní fonty:", e);
+  }
+}
 
 function loadFont(fontUrl){
   if(!fontUrl) return;
@@ -1240,31 +1401,33 @@ function applyFont(fontFamily){
 
 function openFontPicker(){
   let fontButtons = "";
-  availableFonts.forEach((font, idx) => {
-    const isSelected = selectedFont === font.name;
-    fontButtons += `<button class="ascii-btn font-choice" data-index="${idx}" style="min-width:140px;margin:4px;font-family:${font.family};${isSelected ? 'background:var(--accent);color:#111' : ''}">${font.name}</button>\n`;
+  userFonts.forEach((font, idx) => {
+    fontButtons += `<button class="ascii-btn font-choice" data-index="${idx}" style="min-width:140px;margin:4px;font-family:${font.family}" title="Klikni pro výběr, pravý klik pro editaci">${font.name}</button>\n`;
   });
   
   fontBox.innerHTML = `${makeFrame("VYBRAT FONT")}
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0;max-width:500px">
   ${fontButtons}
 </div>
+<div class="small-note" style="margin-bottom:10px">Levý klik = vybrat | Pravý klik = editovat</div>
 <div class="modal-buttons">
   <button class="ascii-btn" id="fontCancel">Zrušit</button>
 </div>`;
   
   container.classList.add("blurred");
+  document.body.style.overflow = "hidden";
   fontModal.style.display = "flex";
   
   // Načtení všech fontů pro preview
-  availableFonts.forEach(font => {
+  userFonts.forEach(font => {
     if(font.url) loadFont(font.url);
   });
   
   document.querySelectorAll(".font-choice").forEach(btn => {
     const idx = parseInt(btn.getAttribute("data-index"));
-    const font = availableFonts[idx];
+    const font = userFonts[idx];
     
+    // Levý klik - výběr fontu
     btn.onclick = () => {
       selectedFont = font.name;
       if(font.url) loadFont(font.url);
@@ -1272,15 +1435,66 @@ function openFontPicker(){
       closeFontPicker();
       showToast("Font nastaven");
     };
+    
+    // Pravý klik - editace fontu
+    btn.oncontextmenu = (e) => {
+      e.preventDefault();
+      openFontEditor(idx);
+    };
   });
   
   document.getElementById("fontCancel").onclick = () => closeFontPicker();
 }
 
+function openFontEditor(index){
+  const currentFont = userFonts[index];
+  
+  fontBox.innerHTML = `${makeFrame("UPRAVIT FONT")}
+<div style="margin:15px 0;text-align:left;max-width:400px">
+  <div style="margin-bottom:10px">Název fontu:</div>
+  <input type="text" id="fontName" value="${currentFont.name}" maxlength="30" class="text-input" style="width:200px">
+  
+  <div style="margin:15px 0 10px 0">Font Family:</div>
+  <input type="text" id="fontFamily" value="${currentFont.family}" class="text-input" style="width:250px">
+  
+  <div style="margin:15px 0 10px 0">Google Fonts URL (volitelné):</div>
+  <input type="text" id="fontUrl" value="${currentFont.url || ''}" placeholder="https://fonts.googleapis.com/..." class="text-input" style="width:100%;max-width:350px">
+  
+  <div style="margin-top:15px;padding:15px;border:1px dashed var(--accent);font-family:${currentFont.family}">
+    Preview textu: 0123456789
+  </div>
+  <div class="small-note">Tip: Najdi monofonty na fonts.google.com/?category=Monospace</div>
+</div>
+<div class="modal-buttons">
+  <button class="ascii-btn" id="fontSave">Uložit</button>
+  <button class="ascii-btn" id="fontBack">Zpět</button>
+</div>`;
+  
+  document.getElementById("fontSave").onclick = async () => {
+    const newName = document.getElementById("fontName").value.trim() || "Custom Font";
+    const newFamily = document.getElementById("fontFamily").value.trim();
+    const newUrl = document.getElementById("fontUrl").value.trim() || null;
+    
+    if(newFamily){
+      userFonts[index] = { name: newName, family: newFamily, url: newUrl };
+      await saveUserFonts();
+      showToast("Font uložen");
+      openFontPicker();
+    } else {
+      showToast("Font Family je povinný");
+    }
+  };
+  
+  document.getElementById("fontBack").onclick = () => openFontPicker();
+}
+
 function closeFontPicker(){
   container.classList.remove("blurred");
+  document.body.style.overflow = "";
   fontModal.style.display = "none";
 }
+
+loadUserFonts();
 
 document.getElementById("fontPickerBtn").addEventListener("click", openFontPicker);
 
@@ -1326,6 +1540,7 @@ function openIntensityPicker(input){
   const val = input.value || "75";
   renderIntensityBox(val);
   container.classList.add("blurred");
+  document.body.style.overflow = "hidden";
   intensityModal.style.display = "flex";
 }
 
@@ -1336,6 +1551,7 @@ function closeIntensityPicker(apply=false){
     activeIntensityInput.value = val;
   }
   container.classList.remove("blurred");
+  document.body.style.overflow = "";
   intensityModal.style.display = "none";
 }
 
@@ -1415,7 +1631,9 @@ async function loadConfig(){
     
     if(uiCfg.selectedFont){
       selectedFont = uiCfg.selectedFont;
-      const font = availableFonts.find(f => f.name === selectedFont);
+      // Počkáme na načtení userFonts
+      await loadUserFonts();
+      const font = userFonts.find(f => f.name === selectedFont);
       if(font){
         if(font.url) loadFont(font.url);
         applyFont(font.family);
@@ -1482,6 +1700,7 @@ ${makeFrame("ZADAT HESLO")}
   <button class="ascii-btn" id="authCancel">Zrušit</button>
 </div>`;
   container.classList.add("blurred");
+  document.body.style.overflow = "hidden";
   authModal.style.display = "flex";
   document.getElementById("authOk").onclick = () => submitWithAuth();
   document.getElementById("authCancel").onclick = () => closeAuth(false);
@@ -1494,6 +1713,7 @@ ${makeFrame("ZADAT HESLO")}
 
 function closeAuth(ok){
   container.classList.remove("blurred");
+  document.body.style.overflow = "";
   authModal.style.display = "none";
 }
 
