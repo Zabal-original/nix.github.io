@@ -150,8 +150,8 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
     max-width:85%;
   }
 }
-#authModal,#intensityModal,#timeModal,#colorModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
-#authBox,#intensityBox,#timeBox,#colorBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
+#authModal,#intensityModal,#timeModal,#colorModal,#effectsModal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000}
+#authBox,#intensityBox,#timeBox,#colorBox,#effectsBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale))}
 input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;color:var(--accent);font-family:var(--font-main)}
 .time-inputs{display:flex;justify-content:center;align-items:center;gap:15px;margin:15px 0;flex-direction:column}
 .time-row{display:flex;align-items:center;gap:10px}
@@ -160,6 +160,9 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 .modal-buttons{display:flex;justify-content:center;gap:20px;margin-top:10px}
 .blurred{filter:blur(4px);pointer-events:none}
 .small-note{font-size:12px;color:#88ffb3;margin-top:6px}
+/* Skrytí scrollbarů */
+::-webkit-scrollbar{width:0;height:0}
+*{scrollbar-width:none;-ms-overflow-style:none}
 </style>
 </head>
 <body>
@@ -204,6 +207,18 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
         <button class="ascii-btn" id="colorPickerBtn" style="padding:4px 8px">[ ◆ ]</button>
       </div>
     </td></tr>
+    <tr><td>Barva pozadí</td><td>
+      <select id="lockBgColor"><option value="off">Výchozí</option><option value="on">Vlastní</option></select>
+    </td></tr>
+    <tr id="bgColorRow" style="display:none"><td>Barva pozadí (hex)</td><td>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <input type="text" id="bgColorValue" placeholder="#0c0c0c" maxlength="7" style="width:100px">
+        <button class="ascii-btn" id="bgColorPickerBtn" style="padding:4px 8px">[ ◆ ]</button>
+      </div>
+    </td></tr>
+    <tr><td>Zvláštní efekty</td><td>
+      <button class="ascii-btn" id="effectsBtn" style="padding:4px 12px">[ ★ Otevřít ]</button>
+    </td></tr>
   </table>
 
   <button id="saveBtn"></button>
@@ -214,6 +229,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 <div id="intensityModal"><div id="intensityBox"></div></div>
 <div id="timeModal"><div id="timeBox"></div></div>
 <div id="colorModal"><div id="colorBox"></div></div>
+<div id="effectsModal"><div id="effectsBox"></div></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -246,6 +262,13 @@ saveBtn.addEventListener("mouseover", ()=> saveBtn.textContent = makeFrame("+++ 
 saveBtn.addEventListener("mouseout", ()=> saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---"));
 const powerBtn = document.getElementById("powerBtn");
 let clockEnabled = true;
+let activeEffects = {
+  uiHueRotate: false,
+  bgHueRotate: false,
+  scanlines: false,
+  scanlineThickness: 2,
+  scanlineSpeed: 5
+};
 function updatePowerBtn(){
   if(clockEnabled){
     powerBtn.textContent = makeFrame("=== HODINY ZAPNUTY ===");
@@ -422,6 +445,16 @@ function toggleUIColorRow(){
   }
 }
 
+function toggleBgColorRow(){
+  const lockSelect = document.getElementById("lockBgColor");
+  const colorRow = document.getElementById("bgColorRow");
+  if(lockSelect.value === "on"){
+    colorRow.style.display = "table-row";
+  } else {
+    colorRow.style.display = "none";
+  }
+}
+
 function toggleBacklightColorRow(){
   const backlightEnabled = document.getElementById("backlightEnabled");
   const colorRow = document.getElementById("backlightColorRow");
@@ -437,6 +470,11 @@ document.getElementById("lockUIColor").addEventListener("change", () => {
   applyCurrentColor();
 });
 
+document.getElementById("lockBgColor").addEventListener("change", () => {
+  toggleBgColorRow();
+  applyCurrentColor();
+});
+
 document.getElementById("backlightEnabled").addEventListener("change", () => {
   toggleBacklightColorRow();
   applyCurrentColor();
@@ -448,6 +486,115 @@ document.getElementById("backlightColor").addEventListener("change", applyCurren
 function applyUIColor(color){
   if(/^#[0-9A-F]{6}$/i.test(color)){
     document.documentElement.style.setProperty('--accent', color);
+  }
+}
+
+// Funkce pro výpočet světlosti barvy (0-255)
+function getLuminance(hex){
+  const r = parseInt(hex.substr(1,2), 16);
+  const g = parseInt(hex.substr(3,2), 16);
+  const b = parseInt(hex.substr(5,2), 16);
+  // Relativní luminance podle ITU-R BT.709
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// Funkce pro výběr kontrastní barvy textu
+function getContrastColor(bgHex){
+  const luminance = getLuminance(bgHex);
+  // Pokud je pozadí světlé (>128), použij tmavou, jinak světlou
+  return luminance > 128 ? '#111111' : '#ffffff';
+}
+
+function applyBgColor(color){
+  if(/^#[0-9A-F]{6}$/i.test(color)){
+    document.body.style.background = color;
+    document.querySelector('.container').style.background = color;
+  }
+}
+
+function applyEffects(){
+  // Odstranění starých animací
+  const oldUIStyle = document.getElementById('ui-hue-animation');
+  const oldBGStyle = document.getElementById('bg-hue-animation');
+  const oldScanlinesStyle = document.getElementById('scanlines-style');
+  if(oldUIStyle) oldUIStyle.remove();
+  if(oldBGStyle) oldBGStyle.remove();
+  if(oldScanlinesStyle) oldScanlinesStyle.remove();
+  
+  // UI HUE Rotate animace
+  if(activeEffects.uiHueRotate){
+    const style = document.createElement('style');
+    style.id = 'ui-hue-animation';
+    style.textContent = `
+      @keyframes uiHueRotate {
+        from { filter: hue-rotate(0deg); }
+        to { filter: hue-rotate(360deg); }
+      }
+      h1, pre, table, th, td, input, select, button, #toast {
+        animation: uiHueRotate 10s linear infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  } else {
+    // Reset filtrů pokud není animace
+    document.querySelectorAll('h1, pre, table, th, td, input, select, button, #toast').forEach(el => {
+      el.style.filter = '';
+      el.style.animation = '';
+    });
+  }
+  
+  // Background HUE Rotate animace
+  if(activeEffects.bgHueRotate){
+    const style = document.createElement('style');
+    style.id = 'bg-hue-animation';
+    style.textContent = `
+      @keyframes bgHueRotate {
+        from { filter: hue-rotate(0deg); }
+        to { filter: hue-rotate(360deg); }
+      }
+      body, .container {
+        animation: bgHueRotate 10s linear infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  } else {
+    // Reset filtrů pokud není animace
+    document.body.style.filter = '';
+    document.body.style.animation = '';
+    document.querySelector('.container').style.animation = '';
+  }
+  
+  // Scanlines s animací a nastavitelnou tloušťkou
+  if(activeEffects.scanlines){
+    const thickness = activeEffects.scanlineThickness || 2;
+    const speed = activeEffects.scanlineSpeed || 5;
+    const style = document.createElement('style');
+    style.id = 'scanlines-style';
+    style.textContent = `
+      @keyframes scanlineMove {
+        from { transform: translateY(0); }
+        to { transform: translateY(${thickness * 2}px); }
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0.15),
+          rgba(0, 0, 0, 0.15) ${thickness}px,
+          transparent ${thickness}px,
+          transparent ${thickness * 2}px
+        );
+        pointer-events: none;
+        z-index: 9999;
+        animation: scanlineMove ${speed}s linear infinite;
+      }
+    `;
+    document.head.appendChild(style);
   }
 }
 
@@ -475,11 +622,29 @@ function applyCurrentColor(){
     // Výchozí zelená
     applyUIColor('#00ff88');
   }
+  
+  // Aplikuj barvu pozadí
+  const lockBg = document.getElementById("lockBgColor").value;
+  const customBg = document.getElementById("bgColorValue").value;
+  if(lockBg === "on"){
+    applyBgColor(customBg);
+  } else {
+    applyBgColor('#0c0c0c');
+  }
+  
+  // Aplikuj efekty
+  applyEffects();
 }
 
 document.getElementById("uiColorValue").addEventListener("input", function(){
   if(document.getElementById("lockUIColor").value === "on"){
     applyUIColor(this.value);
+  }
+});
+
+document.getElementById("bgColorValue").addEventListener("input", function(){
+  if(document.getElementById("lockBgColor").value === "on"){
+    applyBgColor(this.value);
   }
 });
 
@@ -562,10 +727,10 @@ function openColorPicker(){
       openColorEditor(idx);
     };
     
-    // Hover efekt - změna barvy tlačítka
+    // Hover efekt - změna barvy tlačítka s automatickým výběrem kontrastu
     btn.addEventListener("mouseover", function(){
       this.style.background = color;
-      this.style.color = "#111";
+      this.style.color = getContrastColor(color);
       this.style.borderColor = color;
     });
     btn.addEventListener("mouseout", function(){
@@ -631,6 +796,262 @@ function closeColorPicker(){
 loadUserColors();
 
 document.getElementById("colorPickerBtn").addEventListener("click", openColorPicker);
+
+/* ========== background color picker ========== */
+let userBgColors = [
+  { name: "Tmavá", hex: "#0c0c0c" },
+  { name: "Černá", hex: "#000000" },
+  { name: "Tm. Šedá", hex: "#1a1a1a" },
+  { name: "Šedá", hex: "#2a2a2a" },
+  { name: "Sv. Šedá", hex: "#3a3a3a" },
+  { name: "Tm. Modrá", hex: "#0a0a20" },
+  { name: "Tm. Zelená", hex: "#0a200a" },
+  { name: "Tm. Červená", hex: "#200a0a" },
+  { name: "Tm. Fialová", hex: "#1a0a1a" },
+  { name: "Tm. Tyrkys", hex: "#0a1a1a" },
+  { name: "Půlnoč", hex: "#0d1117" },
+  { name: "Uhlí", hex: "#161b22" },
+  { name: "Grafitová", hex: "#21262d" },
+  { name: "Bridlice", hex: "#30363d" },
+  { name: "Ocel", hex: "#424a53" }
+];
+
+async function loadUserBgColors(){
+  try{
+    const snap = await DB.ref('/ui_config/userBgColors').once('value');
+    const saved = snap.val();
+    if(saved && Array.isArray(saved)){
+      userBgColors = saved;
+    }
+  }catch(e){
+    console.log("Nepodařilo se načíst vlastní barvy pozadí:", e);
+  }
+}
+
+async function saveUserBgColors(){
+  try{
+    await DB.ref('/ui_config/userBgColors').set(userBgColors);
+  }catch(e){
+    console.log("Nepodařilo se uložit vlastní barvy pozadí:", e);
+  }
+}
+
+function openBgColorPicker(){
+  let colorButtons = "";
+  userBgColors.forEach((c, idx) => {
+    colorButtons += `<div style="display:flex;flex-direction:column;gap:4px">
+      <button class="ascii-btn bg-color-choice" data-index="${idx}" data-color="${c.hex}" style="min-width:100px;position:relative" title="Klikni pro výběr, pravý klik pro editaci">${c.name}</button>
+    </div>`;
+  });
+  
+  colorBox.innerHTML = `${makeFrame("VYBRAT BARVU POZADÍ")}
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0;max-width:450px">
+  ${colorButtons}
+</div>
+<div class="small-note" style="margin-bottom:10px">Levý klik = vybrat | Pravý klik = editovat</div>
+<div class="modal-buttons">
+  <button class="ascii-btn" id="bgColorCancel">Zrušit</button>
+</div>`;
+  
+  container.classList.add("blurred");
+  colorModal.style.display = "flex";
+  
+  document.querySelectorAll(".bg-color-choice").forEach(btn => {
+    const idx = parseInt(btn.getAttribute("data-index"));
+    const color = btn.getAttribute("data-color");
+    
+    btn.onclick = () => {
+      document.getElementById("bgColorValue").value = color;
+      applyBgColor(color);
+      closeColorPicker();
+    };
+    
+    btn.oncontextmenu = (e) => {
+      e.preventDefault();
+      openBgColorEditor(idx);
+    };
+    
+    btn.addEventListener("mouseover", function(){
+      this.style.background = color;
+      this.style.color = getContrastColor(color);
+      this.style.borderColor = color;
+    });
+    btn.addEventListener("mouseout", function(){
+      this.style.background = "none";
+      this.style.color = "var(--accent)";
+      this.style.borderColor = "var(--accent)";
+    });
+  });
+  
+  document.getElementById("bgColorCancel").onclick = () => closeColorPicker();
+}
+
+function openBgColorEditor(index){
+  const currentColor = userBgColors[index];
+  
+  colorBox.innerHTML = `${makeFrame("UPRAVIT DLAŽDICI")}
+<div style="margin:15px 0">
+  <div style="margin-bottom:10px">Název:</div>
+  <input type="text" id="bgColorName" value="${currentColor.name}" maxlength="20" class="text-input" style="width:150px">
+  
+  <div style="margin:15px 0 10px 0">Barva (HEX):</div>
+  <input type="text" id="bgColorHex" value="${currentColor.hex}" maxlength="7" class="text-input" style="width:100px">
+  
+  <div style="margin-top:15px;padding:20px;border:1px dashed var(--accent);background:${currentColor.hex}" id="bgColorPreview"></div>
+</div>
+<div class="modal-buttons">
+  <button class="ascii-btn" id="bgColorSave">Uložit</button>
+  <button class="ascii-btn" id="bgColorBack">Zpět</button>
+</div>`;
+  
+  const hexInput = document.getElementById("bgColorHex");
+  const preview = document.getElementById("bgColorPreview");
+  
+  hexInput.addEventListener("input", function(){
+    if(/^#[0-9A-F]{6}$/i.test(this.value)){
+      preview.style.background = this.value;
+    }
+  });
+  
+  document.getElementById("bgColorSave").onclick = async () => {
+    const newName = document.getElementById("bgColorName").value.trim() || "Vlastní";
+    const newHex = document.getElementById("bgColorHex").value.trim();
+    
+    if(/^#[0-9A-F]{6}$/i.test(newHex)){
+      userBgColors[index] = { name: newName, hex: newHex };
+      await saveUserBgColors();
+      showToast("Barva uložena");
+      openBgColorPicker();
+    } else {
+      showToast("Neplatný HEX kód");
+    }
+  };
+  
+  document.getElementById("bgColorBack").onclick = () => openBgColorPicker();
+}
+
+loadUserBgColors();
+
+document.getElementById("bgColorPickerBtn").addEventListener("click", openBgColorPicker);
+
+/* ========== effects modal ========== */
+const effectsModal = document.getElementById("effectsModal");
+const effectsBox = document.getElementById("effectsBox");
+
+const availableEffects = [
+  { 
+    id: "uiHueRotate", 
+    name: "HUE Rotate UI", 
+    type: "toggle",
+    description: "Animovaná rotace barevného spektra UI"
+  },
+  { 
+    id: "bgHueRotate", 
+    name: "HUE Rotate BG", 
+    type: "toggle",
+    description: "Animovaná rotace barevného spektra pozadí"
+  },
+  { 
+    id: "scanlines", 
+    name: "Scanlines", 
+    type: "complex",
+    description: "Retro CRT efekt - pohyblivé linky"
+  }
+];
+
+function openEffectsModal(){
+  let effectsHTML = "";
+  
+  availableEffects.forEach(effect => {
+    if(effect.type === "toggle"){
+      const isActive = activeEffects[effect.id];
+      effectsHTML += `
+<div style="margin:15px 0">
+  <button class="ascii-btn effect-toggle" data-effect="${effect.id}" style="min-width:250px;${isActive ? 'background:var(--accent);color:#111' : ''}">
+    ${isActive ? '✓' : '○'} ${effect.name}
+  </button>
+  <div class="small-note">${effect.description}</div>
+</div>`;
+    } else if(effect.type === "complex"){
+      const isActive = activeEffects[effect.id];
+      effectsHTML += `
+<div style="margin:20px 0;padding:15px;border:1px dashed var(--accent)">
+  <button class="ascii-btn effect-toggle" data-effect="${effect.id}" style="min-width:250px;margin-bottom:10px;${isActive ? 'background:var(--accent);color:#111' : ''}">
+    ${isActive ? '✓' : '○'} ${effect.name}
+  </button>
+  <div class="small-note" style="margin-bottom:10px">${effect.description}</div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Tloušťka (px):</span>
+    <button class="ascii-btn" onclick="adjustScanline('thickness', -1)">-</button>
+    <input type="text" id="scanlineThickness" value="${activeEffects.scanlineThickness}" readonly style="width:50px;text-align:center" class="text-input">
+    <button class="ascii-btn" onclick="adjustScanline('thickness', 1)">+</button>
+  </div>
+  
+  <div style="display:flex;align-items:center;gap:10px;margin:8px 0;justify-content:center">
+    <span style="min-width:120px;text-align:right">Rychlost (s):</span>
+    <button class="ascii-btn" onclick="adjustScanline('speed', -1)">-</button>
+    <input type="text" id="scanlineSpeed" value="${activeEffects.scanlineSpeed}" readonly style="width:50px;text-align:center" class="text-input">
+    <button class="ascii-btn" onclick="adjustScanline('speed', 1)">+</button>
+  </div>
+</div>`;
+    }
+  });
+  
+  effectsBox.innerHTML = `${makeFrame("ZVLÁŠTNÍ EFEKTY")}
+<div style="max-height:400px;overflow-y:auto;padding:10px">
+  ${effectsHTML}
+</div>
+<div class="modal-buttons" style="margin-top:20px">
+  <button class="ascii-btn" id="effectsReset">Reset</button>
+  <button class="ascii-btn" id="effectsClose">Zavřít</button>
+</div>`;
+  
+  container.classList.add("blurred");
+  effectsModal.style.display = "flex";
+  
+  // Toggle handlery
+  document.querySelectorAll(".effect-toggle").forEach(btn => {
+    btn.onclick = function(){
+      const effectId = this.getAttribute("data-effect");
+      activeEffects[effectId] = !activeEffects[effectId];
+      applyEffects();
+      openEffectsModal(); // Refresh
+    };
+  });
+  
+  document.getElementById("effectsReset").onclick = () => {
+    activeEffects = {
+      uiHueRotate: false,
+      bgHueRotate: false,
+      scanlines: false,
+      scanlineThickness: 2,
+      scanlineSpeed: 5
+    };
+    applyEffects();
+    openEffectsModal(); // Refresh
+  };
+  
+  document.getElementById("effectsClose").onclick = () => closeEffectsModal();
+}
+
+// Globální funkce pro úpravu scanline hodnot
+window.adjustScanline = function(type, delta){
+  if(type === 'thickness'){
+    activeEffects.scanlineThickness = Math.max(1, Math.min(10, activeEffects.scanlineThickness + delta));
+  } else if(type === 'speed'){
+    activeEffects.scanlineSpeed = Math.max(1, Math.min(20, activeEffects.scanlineSpeed + delta));
+  }
+  applyEffects();
+  openEffectsModal(); // Refresh
+};
+
+function closeEffectsModal(){
+  container.classList.remove("blurred");
+  effectsModal.style.display = "none";
+}
+
+document.getElementById("effectsBtn").addEventListener("click", openEffectsModal);
 
 /* ========== intensity modal (s +/- tlačítky) ========== */
 const intensityModal = document.getElementById("intensityModal");
@@ -754,10 +1175,17 @@ async function loadConfig(){
     // Načteme UI nastavení
     document.getElementById("lockUIColor").value = uiCfg.lockUIColor || "off";
     document.getElementById("uiColorValue").value = uiCfg.uiColorValue || "#00ff88";
+    document.getElementById("lockBgColor").value = uiCfg.lockBgColor || "off";
+    document.getElementById("bgColorValue").value = uiCfg.bgColorValue || "#0c0c0c";
+    
+    if(uiCfg.activeEffects){
+      activeEffects = uiCfg.activeEffects;
+    }
     
     // Zobraz/skryj řádky
     toggleBacklightColorRow();
     toggleUIColorRow();
+    toggleBgColorRow();
     
     // Aplikuj barvu podle nastavení
     applyCurrentColor();
@@ -791,6 +1219,9 @@ function gatherConfig(){
   other.backlightColor = document.getElementById("backlightColor").value;
   other.lockUIColor = document.getElementById("lockUIColor").value;
   other.uiColorValue = document.getElementById("uiColorValue").value || "#00ff88";
+  other.lockBgColor = document.getElementById("lockBgColor").value;
+  other.bgColorValue = document.getElementById("bgColorValue").value || "#0c0c0c";
+  other.activeEffects = activeEffects;
   other.clockEnabled = clockEnabled;
 
   const config = { regen, light, other, lastModified: Date.now() };
@@ -847,7 +1278,10 @@ async function submitWithAuth(){
   // UI nastavení ukládáme ODDĚLENĚ
   const uiConfig = {
     lockUIColor: config.other.lockUIColor,
-    uiColorValue: config.other.uiColorValue
+    uiColorValue: config.other.uiColorValue,
+    lockBgColor: config.other.lockBgColor,
+    bgColorValue: config.other.bgColorValue,
+    activeEffects: config.other.activeEffects
   };
   
   try{
