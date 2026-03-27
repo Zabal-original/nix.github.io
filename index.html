@@ -401,7 +401,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 
   <pre id="lightTitle"></pre>
   <table id="lightTable">
-    <thead><tr><th>Den</th><th>Svit od</th><th>Svit do</th><th>Intenzita (%)</th></tr></thead>
+    <thead><tr><th>Den</th><th>Svit od</th><th>Svit do</th></tr></thead>
     <tbody id="lightDays"></tbody>
   </table>
   <button class="ascii-btn" id="copyLight">Kopírovat první den → všechny</button>
@@ -411,14 +411,19 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
     <tr><td>Posun času (hod)</td><td><input type="number" id="timeOffset" min="-24" max="24" value="0"></td></tr>
     <tr><td>Doba regenerace (min)</td><td><input type="number" id="regenDuration" min="1" max="240" value="30"></td></tr>
     <tr><td>Styl regenerace</td><td>
-      <select id="regenStyle"><option value="vlak">Vlak</option><option value="sportka">Sportka</option><option value="zpetny_vlak">Zpětný vlak</option></select>
+      <select id="regenStyle">
+        <option value="klasik">Čítač (0→9)</option>
+        <option value="vlak">Vlak →</option>
+        <option value="zpetny_vlak">Zpětný vlak ←</option>
+        <option value="random">Random</option>
+      </select>
     </td></tr>
-    <tr><td>Podsvícení</td><td>
-      <select id="backlightEnabled"><option value="on">Zapnuto</option><option value="off">Vypnuto</option></select>
+    <tr><td>Rychlost antipoisoningu (ms)</td><td><input type="number" id="stepDelay" min="50" max="2000" value="200"></td></tr>
+    <tr><td>Rychlost kaskády (ms)</td><td><input type="number" id="cascadeSpeed" min="100" max="2000" value="500"></td></tr>
+    <tr><td>Crossfade číslic</td><td>
+      <select id="crossfadeEnabled"><option value="on">Zapnuto</option><option value="off">Vypnuto</option></select>
     </td></tr>
-    <tr id="backlightColorRow"><td>Barva podsvícení</td><td>
-      <select id="backlightColor"><option value="green" selected>Zelená</option><option value="red">Červená</option><option value="blue">Modrá</option><option value="yellow">Žlutá</option><option value="purple">Fialová</option><option value="white">Bílá</option></select>
-    </td></tr>
+    <tr><td>Délka crossfade (ms)</td><td><input type="number" id="fadeDuration" min="50" max="2000" value="300"></td></tr>
     <tr><td>Barva UI</td><td>
       <select id="lockUIColor"><option value="off">Výchozí</option><option value="on">Vlastní</option></select>
     </td></tr>
@@ -457,6 +462,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 <div id="toast"></div>
 <div id="authModal"><div id="authBox"></div></div>
 <div id="intensityModal"><div id="intensityBox"></div></div>
+<!-- intensityModal zachován pro kompatibilitu -->
 <div id="timeModal"><div id="timeBox"></div></div>
 <div id="colorModal"><div id="colorBox"></div></div>
 <div id="effectsModal"><div id="effectsBox"></div></div>
@@ -562,8 +568,7 @@ for(const d of days){
   lightBody.innerHTML += `<tr>
     <td>${d}</td>
     <td><input type="text" id="${id}-lightStart" placeholder="hh:mm" class="text-input time-input" readonly></td>
-    <td><input type="text" id="${id}-lightEnd" placeholder="hh:mm" class="text-input time-input" readonly></td>
-    <td><input type="text" id="${id}-intensity" value="75" class="text-input intensity-input" readonly></td></tr>`;
+    <td><input type="text" id="${id}-lightEnd" placeholder="hh:mm" class="text-input time-input" readonly></td></tr>`;
 }
 
 /* ========== time modal (hh/mm) ========== */
@@ -656,9 +661,7 @@ function closeTimePicker(apply=false){
 }
 
 document.querySelectorAll('input[readonly]').forEach(inp => {
-  if(inp.classList.contains('intensity-input')){
-    inp.addEventListener("click", () => openIntensityPicker(inp));
-  } else if(inp.classList.contains('time-input')){
+  if(inp.classList.contains('time-input')){
     inp.addEventListener("click", () => openTimePicker(inp));
   }
 });
@@ -700,15 +703,6 @@ function toggleBgColorRow(){
   }
 }
 
-function toggleBacklightColorRow(){
-  const backlightEnabled = document.getElementById("backlightEnabled");
-  const colorRow = document.getElementById("backlightColorRow");
-  if(backlightEnabled.value === "on"){
-    colorRow.style.display = "table-row";
-  } else {
-    colorRow.style.display = "none";
-  }
-}
 
 document.getElementById("lockUIColor").addEventListener("change", () => {
   toggleUIColorRow();
@@ -719,13 +713,6 @@ document.getElementById("lockBgColor").addEventListener("change", () => {
   toggleBgColorRow();
   applyCurrentColor();
 });
-
-document.getElementById("backlightEnabled").addEventListener("change", () => {
-  toggleBacklightColorRow();
-  applyCurrentColor();
-});
-
-document.getElementById("backlightColor").addEventListener("change", applyCurrentColor);
 
 /* ========== aplikace barvy UI ========== */
 function applyUIColor(color){
@@ -985,25 +972,10 @@ function applyEffects(){
 function applyCurrentColor(){
   const lockUI = document.getElementById("lockUIColor").value;
   const customColor = document.getElementById("uiColorValue").value;
-  const backlightEnabled = document.getElementById("backlightEnabled").value;
-  const backlightColor = document.getElementById("backlightColor").value;
-  
+
   if(lockUI === "on"){
-    // Vlastní barva
     applyUIColor(customColor);
-  } else if(backlightEnabled === "on"){
-    // Barva podle podsvícení
-    const colorMap = {
-      green: getComputedStyle(document.documentElement).getPropertyValue('--backlight-green'),
-      red: getComputedStyle(document.documentElement).getPropertyValue('--backlight-red'),
-      blue: getComputedStyle(document.documentElement).getPropertyValue('--backlight-blue'),
-      yellow: getComputedStyle(document.documentElement).getPropertyValue('--backlight-yellow'),
-      purple: getComputedStyle(document.documentElement).getPropertyValue('--backlight-purple'),
-      white: getComputedStyle(document.documentElement).getPropertyValue('--backlight-white')
-    };
-    applyUIColor(colorMap[backlightColor] || '#00ff88');
   } else {
-    // Výchozí zelená
     applyUIColor('#00ff88');
   }
   
@@ -1973,12 +1945,10 @@ function closeIntensityPicker(apply=false){
 document.getElementById("copyLight").onclick = () => {
   const first = document.getElementById("Pon-lightStart").value;
   const first2 = document.getElementById("Pon-lightEnd").value;
-  const firstInt = document.getElementById("Pon-intensity").value;
   days.slice(1).forEach(d=>{
     const id = d.substring(0,3);
     document.getElementById(`${id}-lightStart`).value = first;
     document.getElementById(`${id}-lightEnd`).value = first2;
-    document.getElementById(`${id}-intensity`).value = firstInt;
   });
   showToast("Zkopírováno do všech dnů");
 };
@@ -2020,15 +1990,16 @@ async function loadConfig(){
         const obj = cfg.light[d] || {};
         document.getElementById(`${id}-lightStart`).value = obj.start || "";
         document.getElementById(`${id}-lightEnd`).value = obj.end || "";
-        document.getElementById(`${id}-intensity`).value = obj.intensity || 75;
       }
     }
     if(cfg.other){
       document.getElementById("timeOffset").value = cfg.other.timeOffset || 0;
-      document.getElementById("regenDuration").value = cfg.other.regenDuration || 30;
-      document.getElementById("regenStyle").value = cfg.other.regenStyle || "vlak";
-      document.getElementById("backlightEnabled").value = cfg.other.backlightEnabled || "on";
-      document.getElementById("backlightColor").value = cfg.other.backlightColor || "green";
+      document.getElementById("regenDuration").value = cfg.other.regenDuration || 2;
+      document.getElementById("regenStyle").value = cfg.other.regenStyle || "klasik";
+      document.getElementById("stepDelay").value = cfg.other.stepDelay || 200;
+      document.getElementById("cascadeSpeed").value = cfg.other.cascadeSpeed || 500;
+      document.getElementById("crossfadeEnabled").value = cfg.other.crossfadeEnabled || "on";
+      document.getElementById("fadeDuration").value = cfg.other.fadeDuration || 300;
       clockEnabled = cfg.other.clockEnabled !== undefined ? cfg.other.clockEnabled : true;
       updatePowerBtn();
     }
@@ -2064,7 +2035,6 @@ async function loadConfig(){
     }
     
     // Zobraz/skryj řádky
-    toggleBacklightColorRow();
     toggleUIColorRow();
     toggleBgColorRow();
     
@@ -2089,15 +2059,16 @@ function gatherConfig(){
     regen[d] = document.getElementById(`${id}-regen`).value || "";
     light[d] = {
       start: document.getElementById(`${id}-lightStart`).value || "",
-      end: document.getElementById(`${id}-lightEnd`).value || "",
-      intensity: parseInt(document.getElementById(`${id}-intensity`).value) || 75
+      end: document.getElementById(`${id}-lightEnd`).value || ""
     };
   }
   other.timeOffset = parseInt(document.getElementById("timeOffset").value) || 0;
-  other.regenDuration = parseInt(document.getElementById("regenDuration").value) || 30;
+  other.regenDuration = parseInt(document.getElementById("regenDuration").value) || 2;
   other.regenStyle = document.getElementById("regenStyle").value;
-  other.backlightEnabled = document.getElementById("backlightEnabled").value;
-  other.backlightColor = document.getElementById("backlightColor").value;
+  other.stepDelay = parseInt(document.getElementById("stepDelay").value) || 200;
+  other.cascadeSpeed = parseInt(document.getElementById("cascadeSpeed").value) || 500;
+  other.crossfadeEnabled = document.getElementById("crossfadeEnabled").value;
+  other.fadeDuration = parseInt(document.getElementById("fadeDuration").value) || 300;
   other.lockUIColor = document.getElementById("lockUIColor").value;
   other.uiColorValue = document.getElementById("uiColorValue").value || "#00ff88";
   other.lockBgColor = document.getElementById("lockBgColor").value;
@@ -2153,8 +2124,10 @@ async function submitWithAuth(){
       timeOffset: config.other.timeOffset,
       regenDuration: config.other.regenDuration,
       regenStyle: config.other.regenStyle,
-      backlightEnabled: config.other.backlightEnabled,
-      backlightColor: config.other.backlightColor,
+      stepDelay: config.other.stepDelay,
+      cascadeSpeed: config.other.cascadeSpeed,
+      crossfadeEnabled: config.other.crossfadeEnabled,
+      fadeDuration: config.other.fadeDuration,
       clockEnabled: config.other.clockEnabled
     },
     lastModified: config.lastModified
