@@ -418,6 +418,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
         <option value="random">Random</option>
       </select>
     </td></tr>
+    <tr id="trainWidthRow" style="display:none"><td>Počet vagonů (1–6)</td><td><input type="number" id="trainWidth" min="1" max="6" value="1"></td></tr>
     <tr><td>Rychlost antipoisoningu (ms)</td><td><input type="number" id="stepDelay" min="50" max="2000" value="200"></td></tr>
     <tr><td>Rychlost kaskády (ms)</td><td><input type="number" id="cascadeSpeed" min="100" max="2000" value="500"></td></tr>
     <tr><td>Crossfade číslic</td><td>
@@ -683,6 +684,14 @@ timeOffsetInput.addEventListener("blur", function(){
 });
 
 /* ========== zamknutí barvy UI - zobraz/skryj řádek ========== */
+function toggleTrainWidthRow(){
+  const style = document.getElementById("regenStyle").value;
+  const row = document.getElementById("trainWidthRow");
+  row.style.display = (style === "vlak" || style === "zpetny_vlak") ? "table-row" : "none";
+}
+
+document.getElementById("regenStyle").addEventListener("change", toggleTrainWidthRow);
+
 function toggleUIColorRow(){
   const lockSelect = document.getElementById("lockUIColor");
   const colorRow = document.getElementById("uiColorRow");
@@ -1998,8 +2007,10 @@ async function loadConfig(){
       document.getElementById("regenStyle").value = cfg.other.regenStyle || "klasik";
       document.getElementById("stepDelay").value = cfg.other.stepDelay || 200;
       document.getElementById("cascadeSpeed").value = cfg.other.cascadeSpeed || 500;
+      document.getElementById("trainWidth").value = cfg.other.trainWidth || 1;
       document.getElementById("crossfadeEnabled").value = cfg.other.crossfadeEnabled || "on";
       document.getElementById("fadeDuration").value = cfg.other.fadeDuration || 300;
+      toggleTrainWidthRow();
       clockEnabled = cfg.other.clockEnabled !== undefined ? cfg.other.clockEnabled : true;
       updatePowerBtn();
     }
@@ -2035,6 +2046,7 @@ async function loadConfig(){
     }
     
     // Zobraz/skryj řádky
+    toggleTrainWidthRow();
     toggleUIColorRow();
     toggleBgColorRow();
     
@@ -2067,6 +2079,7 @@ function gatherConfig(){
   other.regenStyle = document.getElementById("regenStyle").value;
   other.stepDelay = parseInt(document.getElementById("stepDelay").value) || 200;
   other.cascadeSpeed = parseInt(document.getElementById("cascadeSpeed").value) || 500;
+  other.trainWidth = parseInt(document.getElementById("trainWidth").value) || 1;
   other.crossfadeEnabled = document.getElementById("crossfadeEnabled").value;
   other.fadeDuration = parseInt(document.getElementById("fadeDuration").value) || 300;
   other.lockUIColor = document.getElementById("lockUIColor").value;
@@ -2126,6 +2139,7 @@ async function submitWithAuth(){
       regenStyle: config.other.regenStyle,
       stepDelay: config.other.stepDelay,
       cascadeSpeed: config.other.cascadeSpeed,
+      trainWidth: config.other.trainWidth,
       crossfadeEnabled: config.other.crossfadeEnabled,
       fadeDuration: config.other.fadeDuration,
       clockEnabled: config.other.clockEnabled
