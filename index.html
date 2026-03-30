@@ -406,9 +406,21 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
   </table>
   <button class="ascii-btn" id="copyLight">Kopírovat první den → všechny</button>
 
+  <div id="quietSection" style="display:none">
+    <pre id="quietTitle"></pre>
+    <table id="quietTable">
+      <thead><tr><th>Den</th><th>Tichý mód od</th><th>Tichý mód do</th></tr></thead>
+      <tbody id="quietDays"></tbody>
+    </table>
+    <button class="ascii-btn" id="copyQuiet">Kopírovat první den → všechny</button>
+  </div>
+
   <pre id="otherTitle"></pre>
   <table id="otherTable">
     <tr><td>Posun času (hod)</td><td><input type="number" id="timeOffset" min="-24" max="24" value="0"></td></tr>
+    <tr><td>Tichý mód</td><td>
+      <select id="quietEnabled"><option value="off">Vypnuto</option><option value="on">Zapnuto</option></select>
+    </td></tr>
     <tr><td>Doba regenerace (min)</td><td><input type="number" id="regenDuration" min="1" max="240" value="30"></td></tr>
     <tr><td>Styl regenerace</td><td>
       <select id="regenStyle">
@@ -493,6 +505,7 @@ function makeFrame(text){
 }
 document.getElementById("regenTitle").textContent = makeFrame("Čas regenerace pro jednotlivé dny");
 document.getElementById("lightTitle").textContent = makeFrame("Čas svitu (od–do) a intenzita pro každý den");
+document.getElementById("quietTitle").textContent = makeFrame("Tichý mód (od–do) pro každý den");
 document.getElementById("otherTitle").textContent = makeFrame("Ostatní nastavení");
 const saveBtn = document.getElementById("saveBtn");
 saveBtn.textContent = makeFrame("--- ULOŽIT NASTAVENÍ ---");
@@ -563,6 +576,7 @@ function showToast(msg="OK - ULOŽENO", duration=2500){
 const days = ["Pondělí","Úterý","Středa","Čtvrtek","Pátek","Sobota","Neděle"];
 const regenBody = document.getElementById("regenDays");
 const lightBody = document.getElementById("lightDays");
+const quietBody = document.getElementById("quietDays");
 for(const d of days){
   const id = d.substring(0,3);
   regenBody.innerHTML += `<tr><td>${d}</td><td><input type="text" id="${id}-regen" placeholder="hh:mm" class="text-input time-input" readonly></td></tr>`;
@@ -570,7 +584,17 @@ for(const d of days){
     <td>${d}</td>
     <td><input type="text" id="${id}-lightStart" placeholder="hh:mm" class="text-input time-input" readonly></td>
     <td><input type="text" id="${id}-lightEnd" placeholder="hh:mm" class="text-input time-input" readonly></td></tr>`;
+  quietBody.innerHTML += `<tr>
+    <td>${d}</td>
+    <td><input type="text" id="${id}-quietStart" placeholder="hh:mm" class="text-input time-input" readonly></td>
+    <td><input type="text" id="${id}-quietEnd" placeholder="hh:mm" class="text-input time-input" readonly></td></tr>`;
 }
+
+function toggleQuietSection(){
+  const enabled = document.getElementById("quietEnabled").value;
+  document.getElementById("quietSection").style.display = (enabled === "on") ? "block" : "none";
+}
+document.getElementById("quietEnabled").addEventListener("change", toggleQuietSection);
 
 /* ========== time modal (hh/mm) ========== */
 const timeModal = document.getElementById("timeModal");
@@ -1969,6 +1993,16 @@ document.getElementById("copyRegen").onclick = () => {
   });
   showToast("Zkopírováno do všech dnů");
 };
+document.getElementById("copyQuiet").onclick = () => {
+  const first = document.getElementById("Pon-quietStart").value;
+  const first2 = document.getElementById("Pon-quietEnd").value;
+  days.slice(1).forEach(d=>{
+    const id = d.substring(0,3);
+    document.getElementById(`${id}-quietStart`).value = first;
+    document.getElementById(`${id}-quietEnd`).value = first2;
+  });
+  showToast("Zkopírováno do všech dnů");
+};
 
 /* ========== načtení configu z Firebase při startu ========== */
 async function loadConfig(){
@@ -2001,7 +2035,16 @@ async function loadConfig(){
         document.getElementById(`${id}-lightEnd`).value = obj.end || "";
       }
     }
+    if(cfg.quiet){
+      for(const d of days){
+        const id = d.substring(0,3);
+        const obj = cfg.quiet[d] || {};
+        document.getElementById(`${id}-quietStart`).value = obj.start || "";
+        document.getElementById(`${id}-quietEnd`).value = obj.end || "";
+      }
+    }
     if(cfg.other){
+      document.getElementById("quietEnabled").value = cfg.other.quietEnabled || "off";
       document.getElementById("timeOffset").value = cfg.other.timeOffset || 0;
       document.getElementById("regenDuration").value = cfg.other.regenDuration || 2;
       document.getElementById("regenStyle").value = cfg.other.regenStyle || "klasik";
@@ -2046,6 +2089,7 @@ async function loadConfig(){
     }
     
     // Zobraz/skryj řádky
+    toggleQuietSection();
     toggleTrainWidthRow();
     toggleUIColorRow();
     toggleBgColorRow();
@@ -2065,6 +2109,7 @@ loadConfig();
 function gatherConfig(){
   const regen = {};
   const light = {};
+  const quiet = {};
   const other = {};
   for(const d of days){
     const id = d.substring(0,3);
@@ -2073,7 +2118,12 @@ function gatherConfig(){
       start: document.getElementById(`${id}-lightStart`).value || "",
       end: document.getElementById(`${id}-lightEnd`).value || ""
     };
+    quiet[d] = {
+      start: document.getElementById(`${id}-quietStart`).value || "",
+      end: document.getElementById(`${id}-quietEnd`).value || ""
+    };
   }
+  other.quietEnabled = document.getElementById("quietEnabled").value;
   other.timeOffset = parseInt(document.getElementById("timeOffset").value) || 0;
   other.regenDuration = parseInt(document.getElementById("regenDuration").value) || 2;
   other.regenStyle = document.getElementById("regenStyle").value;
@@ -2091,7 +2141,7 @@ function gatherConfig(){
   other.selectedFont = selectedFont;
   other.selectedStyle = selectedStyle;
 
-  const config = { regen, light, other, lastModified: Date.now() };
+  const config = { regen, light, quiet, other, lastModified: Date.now() };
   return config;
 }
 
@@ -2133,7 +2183,9 @@ async function submitWithAuth(){
   const espConfig = {
     regen: config.regen,
     light: config.light,
+    quiet: config.quiet,
     other: {
+      quietEnabled: config.other.quietEnabled,
       timeOffset: config.other.timeOffset,
       regenDuration: config.other.regenDuration,
       regenStyle: config.other.regenStyle,
