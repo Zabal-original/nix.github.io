@@ -401,7 +401,7 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
 
   <pre id="lightTitle"></pre>
   <table id="lightTable">
-    <thead><tr><th>Den</th><th>Svit od</th><th>Svit do</th></tr></thead>
+    <thead><tr><th>Den</th><th>Slot 1 od</th><th>Slot 1 do</th><th>Slot 2 od</th><th>Slot 2 do</th></tr></thead>
     <tbody id="lightDays"></tbody>
   </table>
   <button class="ascii-btn" id="copyLight">Kopírovat první den → všechny</button>
@@ -409,10 +409,11 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
   <div id="quietSection" style="display:none">
     <pre id="quietTitle"></pre>
     <table id="quietTable">
-      <thead><tr><th>Den</th><th>Tichý mód od</th><th>Tichý mód do</th></tr></thead>
+      <thead><tr><th>Den</th><th>Slot 1 od</th><th>Slot 1 do</th><th>Slot 2 od</th><th>Slot 2 do</th></tr></thead>
       <tbody id="quietDays"></tbody>
     </table>
     <button class="ascii-btn" id="copyQuiet">Kopírovat první den → všechny</button>
+    <div class="small-note" style="margin:6px 0 15px 0">Tichý mód lze nastavit pouze v rámci doby svitu.</div>
   </div>
 
   <pre id="otherTitle"></pre>
@@ -582,17 +583,59 @@ for(const d of days){
   regenBody.innerHTML += `<tr><td>${d}</td><td><input type="text" id="${id}-regen" placeholder="hh:mm" class="text-input time-input" readonly></td></tr>`;
   lightBody.innerHTML += `<tr>
     <td>${d}</td>
-    <td><input type="text" id="${id}-lightStart" placeholder="hh:mm" class="text-input time-input" readonly></td>
-    <td><input type="text" id="${id}-lightEnd" placeholder="hh:mm" class="text-input time-input" readonly></td></tr>`;
+    <td><input type="text" id="${id}-light1Start" placeholder="hh:mm" class="text-input time-input" readonly></td>
+    <td><input type="text" id="${id}-light1End" placeholder="hh:mm" class="text-input time-input" readonly></td>
+    <td><input type="text" id="${id}-light2Start" placeholder="--:--" class="text-input time-input" readonly></td>
+    <td><input type="text" id="${id}-light2End" placeholder="--:--" class="text-input time-input" readonly></td></tr>`;
   quietBody.innerHTML += `<tr>
     <td>${d}</td>
-    <td><input type="text" id="${id}-quietStart" placeholder="hh:mm" class="text-input time-input" readonly></td>
-    <td><input type="text" id="${id}-quietEnd" placeholder="hh:mm" class="text-input time-input" readonly></td></tr>`;
+    <td><input type="text" id="${id}-quiet1Start" placeholder="hh:mm" class="text-input time-input" readonly></td>
+    <td><input type="text" id="${id}-quiet1End" placeholder="hh:mm" class="text-input time-input" readonly></td>
+    <td><input type="text" id="${id}-quiet2Start" placeholder="--:--" class="text-input time-input" readonly></td>
+    <td><input type="text" id="${id}-quiet2End" placeholder="--:--" class="text-input time-input" readonly></td></tr>`;
 }
 
 function toggleQuietSection(){
   const enabled = document.getElementById("quietEnabled").value;
   document.getElementById("quietSection").style.display = (enabled === "on") ? "block" : "none";
+  if(enabled === "on") validateQuietTimes();
+}
+
+// Validace — tichý mód musí být v rámci svitu
+function timeToMins(str){ if(!str || str.length < 5) return -1; return parseInt(str.slice(0,2))*60+parseInt(str.slice(3,5)); }
+function inLightSlot(qStart, qEnd, ls, le){
+  // Zjednodušená validace — qStart musí být >= ls a qEnd musí být <= le (pro nepřechod přes půlnoc)
+  const qS = timeToMins(qStart), qE = timeToMins(qEnd);
+  const lS = timeToMins(ls),     lE = timeToMins(le);
+  if(qS < 0 || qE < 0 || lS < 0 || lE < 0) return true; // prázdné pole = nevalidujeme
+  return qS >= lS && qE <= lE;
+}
+function validateQuietTimes(){
+  if(document.getElementById("quietEnabled").value !== "on") return;
+  let hasWarning = false;
+  for(const d of days){
+    const id = d.substring(0,3);
+    const ls1 = document.getElementById(`${id}-light1Start`).value;
+    const le1 = document.getElementById(`${id}-light1End`).value;
+    const ls2 = document.getElementById(`${id}-light2Start`).value;
+    const le2 = document.getElementById(`${id}-light2End`).value;
+    const qs1 = document.getElementById(`${id}-quiet1Start`).value;
+    const qe1 = document.getElementById(`${id}-quiet1End`).value;
+    const qs2 = document.getElementById(`${id}-quiet2Start`).value;
+    const qe2 = document.getElementById(`${id}-quiet2End`).value;
+    // Zkontroluj slot 1 quiet — musí být v nějakém light slotu
+    if(qs1 && qe1){
+      const ok = inLightSlot(qs1, qe1, ls1, le1) || (ls2 && inLightSlot(qs1, qe1, ls2, le2));
+      if(!ok){ hasWarning = true; document.getElementById(`${id}-quiet1Start`).style.borderColor = "#ff0044"; document.getElementById(`${id}-quiet1End`).style.borderColor = "#ff0044"; }
+      else { document.getElementById(`${id}-quiet1Start`).style.borderColor = ""; document.getElementById(`${id}-quiet1End`).style.borderColor = ""; }
+    }
+    if(qs2 && qe2){
+      const ok = inLightSlot(qs2, qe2, ls1, le1) || (ls2 && inLightSlot(qs2, qe2, ls2, le2));
+      if(!ok){ hasWarning = true; document.getElementById(`${id}-quiet2Start`).style.borderColor = "#ff0044"; document.getElementById(`${id}-quiet2End`).style.borderColor = "#ff0044"; }
+      else { document.getElementById(`${id}-quiet2Start`).style.borderColor = ""; document.getElementById(`${id}-quiet2End`).style.borderColor = ""; }
+    }
+  }
+  if(hasWarning) showToast("⚠ Tichý mód mimo dobu svitu!", 4000);
 }
 document.getElementById("quietEnabled").addEventListener("change", toggleQuietSection);
 
@@ -1976,12 +2019,11 @@ function closeIntensityPicker(apply=false){
 
 /* ========== copy buttons ========== */
 document.getElementById("copyLight").onclick = () => {
-  const first = document.getElementById("Pon-lightStart").value;
-  const first2 = document.getElementById("Pon-lightEnd").value;
+  const id0 = days[0].substring(0,3);
+  const v = ['light1Start','light1End','light2Start','light2End'].map(k => document.getElementById(`${id0}-${k}`).value);
   days.slice(1).forEach(d=>{
     const id = d.substring(0,3);
-    document.getElementById(`${id}-lightStart`).value = first;
-    document.getElementById(`${id}-lightEnd`).value = first2;
+    ['light1Start','light1End','light2Start','light2End'].forEach((k,i) => document.getElementById(`${id}-${k}`).value = v[i]);
   });
   showToast("Zkopírováno do všech dnů");
 };
@@ -1994,13 +2036,13 @@ document.getElementById("copyRegen").onclick = () => {
   showToast("Zkopírováno do všech dnů");
 };
 document.getElementById("copyQuiet").onclick = () => {
-  const first = document.getElementById("Pon-quietStart").value;
-  const first2 = document.getElementById("Pon-quietEnd").value;
+  const id0 = days[0].substring(0,3);
+  const v = ['quiet1Start','quiet1End','quiet2Start','quiet2End'].map(k => document.getElementById(`${id0}-${k}`).value);
   days.slice(1).forEach(d=>{
     const id = d.substring(0,3);
-    document.getElementById(`${id}-quietStart`).value = first;
-    document.getElementById(`${id}-quietEnd`).value = first2;
+    ['quiet1Start','quiet1End','quiet2Start','quiet2End'].forEach((k,i) => document.getElementById(`${id}-${k}`).value = v[i]);
   });
+  validateQuietTimes();
   showToast("Zkopírováno do všech dnů");
 };
 
@@ -2031,16 +2073,20 @@ async function loadConfig(){
       for(const d of days){
         const id = d.substring(0,3);
         const obj = cfg.light[d] || {};
-        document.getElementById(`${id}-lightStart`).value = obj.start || "";
-        document.getElementById(`${id}-lightEnd`).value = obj.end || "";
+        document.getElementById(`${id}-light1Start`).value = (obj.slot1 && obj.slot1.start) || "";
+        document.getElementById(`${id}-light1End`).value   = (obj.slot1 && obj.slot1.end)   || "";
+        document.getElementById(`${id}-light2Start`).value = (obj.slot2 && obj.slot2.start) || "";
+        document.getElementById(`${id}-light2End`).value   = (obj.slot2 && obj.slot2.end)   || "";
       }
     }
     if(cfg.quiet){
       for(const d of days){
         const id = d.substring(0,3);
         const obj = cfg.quiet[d] || {};
-        document.getElementById(`${id}-quietStart`).value = obj.start || "";
-        document.getElementById(`${id}-quietEnd`).value = obj.end || "";
+        document.getElementById(`${id}-quiet1Start`).value = (obj.slot1 && obj.slot1.start) || "";
+        document.getElementById(`${id}-quiet1End`).value   = (obj.slot1 && obj.slot1.end)   || "";
+        document.getElementById(`${id}-quiet2Start`).value = (obj.slot2 && obj.slot2.start) || "";
+        document.getElementById(`${id}-quiet2End`).value   = (obj.slot2 && obj.slot2.end)   || "";
       }
     }
     if(cfg.other){
@@ -2093,6 +2139,7 @@ async function loadConfig(){
     toggleTrainWidthRow();
     toggleUIColorRow();
     toggleBgColorRow();
+    validateQuietTimes();
     
     // Aplikuj barvu podle nastavení
     applyCurrentColor();
@@ -2114,14 +2161,20 @@ function gatherConfig(){
   for(const d of days){
     const id = d.substring(0,3);
     regen[d] = document.getElementById(`${id}-regen`).value || "";
-    light[d] = {
-      start: document.getElementById(`${id}-lightStart`).value || "",
-      end: document.getElementById(`${id}-lightEnd`).value || ""
-    };
-    quiet[d] = {
-      start: document.getElementById(`${id}-quietStart`).value || "",
-      end: document.getElementById(`${id}-quietEnd`).value || ""
-    };
+    const l1s = document.getElementById(`${id}-light1Start`).value;
+    const l1e = document.getElementById(`${id}-light1End`).value;
+    const l2s = document.getElementById(`${id}-light2Start`).value;
+    const l2e = document.getElementById(`${id}-light2End`).value;
+    light[d] = { slot1: { start: l1s, end: l1e } };
+    if(l2s && l2e) light[d].slot2 = { start: l2s, end: l2e };
+
+    const q1s = document.getElementById(`${id}-quiet1Start`).value;
+    const q1e = document.getElementById(`${id}-quiet1End`).value;
+    const q2s = document.getElementById(`${id}-quiet2Start`).value;
+    const q2e = document.getElementById(`${id}-quiet2End`).value;
+    quiet[d] = {};
+    if(q1s && q1e) quiet[d].slot1 = { start: q1s, end: q1e };
+    if(q2s && q2e) quiet[d].slot2 = { start: q2s, end: q2e };
   }
   other.quietEnabled = document.getElementById("quietEnabled").value;
   other.timeOffset = parseInt(document.getElementById("timeOffset").value) || 0;
