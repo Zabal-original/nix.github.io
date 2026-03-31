@@ -422,6 +422,10 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
     <tr><td>Tichý mód</td><td>
       <select id="quietEnabled"><option value="off">Vypnuto</option><option value="on">Zapnuto</option></select>
     </td></tr>
+    <tr><td>Hudební mód</td><td>
+      <select id="musicEnabled"><option value="off">Vypnuto</option><option value="on">Zapnuto</option></select>
+    </td></tr>
+
     <tr><td>Doba regenerace (min)</td><td><input type="number" id="regenDuration" min="1" max="240" value="30"></td></tr>
     <tr><td>Styl regenerace</td><td>
       <select id="regenStyle">
@@ -2091,6 +2095,7 @@ async function loadConfig(){
     }
     if(cfg.other){
       document.getElementById("quietEnabled").value = cfg.other.quietEnabled || "off";
+      document.getElementById("musicEnabled").value = cfg.other.musicEnabled || "off";
       document.getElementById("timeOffset").value = cfg.other.timeOffset || 0;
       document.getElementById("regenDuration").value = cfg.other.regenDuration || 2;
       document.getElementById("regenStyle").value = cfg.other.regenStyle || "klasik";
@@ -2177,6 +2182,7 @@ function gatherConfig(){
     if(q2s && q2e) quiet[d].slot2 = { start: q2s, end: q2e };
   }
   other.quietEnabled = document.getElementById("quietEnabled").value;
+  other.musicEnabled = document.getElementById("musicEnabled").value;
   other.timeOffset = parseInt(document.getElementById("timeOffset").value) || 0;
   other.regenDuration = parseInt(document.getElementById("regenDuration").value) || 2;
   other.regenStyle = document.getElementById("regenStyle").value;
@@ -2239,6 +2245,7 @@ async function submitWithAuth(){
     quiet: config.quiet,
     other: {
       quietEnabled: config.other.quietEnabled,
+      musicEnabled: config.other.musicEnabled,
       timeOffset: config.other.timeOffset,
       regenDuration: config.other.regenDuration,
       regenStyle: config.other.regenStyle,
