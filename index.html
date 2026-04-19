@@ -426,6 +426,12 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
       <select id="musicEnabled"><option value="off">Vypnuto</option><option value="on">Zapnuto</option></select>
     </td></tr>
 
+    <tr><td>Svítit do půlnoci</td><td>
+      <button class="ascii-btn" id="btnOverrideOn" onclick="setOverride(true)">[ ☀ ZAPNOUT DNES ]</button>
+      <button class="ascii-btn" id="btnOverrideOff" onclick="setOverride(false)">[ ✕ VYPNOUT ]</button>
+      <div id="overrideStatus" style="margin-top:4px;font-size:0.85em;color:#aaa;font-family:var(--font-main)"></div>
+    </td></tr>
+
     <tr><td>Doba regenerace (min)</td><td><input type="number" id="regenDuration" min="1" max="240" value="30"></td></tr>
     <tr><td>Styl regenerace</td><td>
       <select id="regenStyle">
@@ -2107,6 +2113,8 @@ async function loadConfig(){
       toggleTrainWidthRow();
       clockEnabled = cfg.other.clockEnabled !== undefined ? cfg.other.clockEnabled : true;
       updatePowerBtn();
+      _overrideDate = cfg.other.overrideDate || "";
+      updateOverrideStatus(_overrideDate);
     }
     
     // Načteme UI nastavení
@@ -2157,6 +2165,32 @@ async function loadConfig(){
 }
 loadConfig();
 
+/* ========== Override — svit do půlnoci ========== */
+function updateOverrideStatus(dateStr) {
+  const el = document.getElementById("overrideStatus");
+  if (!dateStr) {
+    el.textContent = "Vypnuto";
+    el.style.color = "#aaa";
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (dateStr === today) {
+    el.textContent = "Aktivní dnes (" + dateStr + ")";
+    el.style.color = "#4caf50";
+  } else {
+    el.textContent = "Neaktivní (" + dateStr + ")";
+    el.style.color = "#aaa";
+  }
+}
+
+let _overrideDate = "";
+
+function setOverride(enable) {
+  const today = new Date().toISOString().slice(0, 10);
+  _overrideDate = enable ? today : "";
+  updateOverrideStatus(_overrideDate);
+}
+
 /* ========== sestavení JSON z UI ========== */
 function gatherConfig(){
   const regen = {};
@@ -2183,6 +2217,8 @@ function gatherConfig(){
   }
   other.quietEnabled = document.getElementById("quietEnabled").value;
   other.musicEnabled = document.getElementById("musicEnabled").value;
+  other.overrideDate = _overrideDate;
+  // overrideDate se zapisuje přímo přes setOverride(), ne přes gatherConfig
   other.timeOffset = parseInt(document.getElementById("timeOffset").value) || 0;
   other.regenDuration = parseInt(document.getElementById("regenDuration").value) || 2;
   other.regenStyle = document.getElementById("regenStyle").value;
@@ -2254,7 +2290,8 @@ async function submitWithAuth(){
       trainWidth: config.other.trainWidth,
       crossfadeEnabled: config.other.crossfadeEnabled,
       fadeDuration: config.other.fadeDuration,
-      clockEnabled: config.other.clockEnabled
+      clockEnabled: config.other.clockEnabled,
+      overrideDate: config.other.overrideDate
     },
     lastModified: config.lastModified
   };
@@ -2291,9 +2328,6 @@ async function submitWithAuth(){
     // Počkáme na dokončení
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Smažeme autentizační node
-    await DB.ref('/_auth').remove();
-    
     closeAuth(true);
     await new Promise(resolve => setTimeout(resolve, 300));
     
@@ -2310,6 +2344,9 @@ async function submitWithAuth(){
     }else{
       showToast("Chyba: " + e.message);
     }
+  }finally{
+    // Vždy smazat _auth — i při chybě
+    try { await DB.ref('/_auth').remove(); } catch(_) {}
   }
 }
 
