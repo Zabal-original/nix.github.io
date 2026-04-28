@@ -370,8 +370,17 @@ button.ascii-btn:hover{background:var(--accent);color:#111}
     max-width:85%;
   }
 }
-#authModal,#intensityModal,#timeModal,#colorModal,#effectsModal,#fontModal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000;overflow-y:auto}
-#authBox,#intensityBox,#timeBox,#colorBox,#effectsBox,#fontBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale));margin:auto;position:relative;max-height:90vh;overflow-y:auto}
+#authModal,#intensityModal,#timeModal,#colorModal,#effectsModal,#fontModal,#presetModal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000;overflow-y:auto}
+#authBox,#intensityBox,#timeBox,#colorBox,#effectsBox,#fontBox,#presetBox{background:#111;color:var(--accent);border:2px solid var(--accent);font-family:var(--font-main);padding:25px 40px;text-align:center;white-space:pre;transform:scale(var(--time-scale));margin:auto;position:relative;max-height:90vh;overflow-y:auto}
+#presetSection{margin:0 0 25px 0;font-family:var(--font-main);color:var(--accent)}
+#presetTable{width:100%;border-collapse:collapse;margin-bottom:8px}
+#presetTable th,#presetTable td{text-align:center;padding:4px}
+#presetTable .col-name{width:25%}
+#presetTable .col-note{width:50%}
+#presetTable .col-actions{width:25%;white-space:nowrap}
+#presetTable input.preset-inline{background:#111;color:var(--accent);border:1px solid var(--accent);font-family:var(--font-main);width:95%;padding:1px 4px;text-align:center}
+#presetTable tr.preset-active td{background:rgba(var(--accent-rgb),0.08)}
+#presetTable .ascii-btn{border:none !important;font-size:0.9em;padding:1px 6px;margin:0 2px}
 #effectsBox{max-height:80vh}
 input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;color:var(--accent);font-family:var(--font-main)}
 .time-inputs{display:flex;justify-content:center;align-items:center;gap:15px;margin:15px 0;flex-direction:column}
@@ -480,11 +489,21 @@ input.text-input{border:1px dashed var(--accent);width:60px;background:#0c0c0c;c
     </td></tr>
   </table>
 
+  <pre id="presetTitle"></pre>
+  <div id="presetSection">
+    <table id="presetTable">
+      <thead><tr><th class="col-name">Název</th><th class="col-note">Poznámka</th><th class="col-actions">Akce</th></tr></thead>
+      <tbody id="presetList"></tbody>
+    </table>
+    <button class="ascii-btn" onclick="openSavePreset()">[ + ULOŽIT JAKO PRESET ]</button>
+  </div>
+
   <button id="saveBtn"></button>
 </div>
 
 <div id="toast"></div>
 <div id="authModal"><div id="authBox"></div></div>
+<div id="presetModal"><div id="presetBox"></div></div>
 <div id="intensityModal"><div id="intensityBox"></div></div>
 <!-- intensityModal zachován pro kompatibilitu -->
 <div id="timeModal"><div id="timeBox"></div></div>
@@ -2191,6 +2210,163 @@ function setOverride(enable) {
   updateOverrideStatus(_overrideDate);
 }
 
+/* ========== PRESETY ========== */
+let _presets = {};
+let _activePresetKey = null; // klic presetu ktery odpovida aktualnimu Firebase configu
+const presetModal = document.getElementById("presetModal");
+const presetBox   = document.getElementById("presetBox");
+
+document.getElementById("presetTitle").textContent = makeFrame("--- PRESETY ---");
+
+async function loadPresets() {
+  try {
+    const snap = await DB.ref("/presets").get();
+    _presets = snap.exists() ? snap.val() : {};
+    // Zjisti ktery preset odpovida aktualnimu configu
+    try {
+      const cfgSnap = await DB.ref("/config").get();
+      const currentCfg = cfgSnap.exists() ? JSON.stringify(cfgSnap.val()) : "";
+      _activePresetKey = null;
+      for(const k of Object.keys(_presets)) {
+        if(_presets[k].config && JSON.stringify(_presets[k].config) === currentCfg) {
+          _activePresetKey = k;
+          break;
+        }
+      }
+    } catch(e) {}
+    renderPresetList();
+  } catch(e) {
+    _presets = {};
+    renderPresetList();
+  }
+}
+
+function renderPresetList() {
+  const tbody = document.getElementById("presetList");
+  const keys = Object.keys(_presets);
+  if(keys.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#555;padding:8px">-- žádné presety --</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = keys.map(k => {
+    const p = _presets[k];
+    const isActive = k === _activePresetKey;
+    const activeLabel = isActive ? `<span style="font-size:0.8em;opacity:0.7">[ aktivní ]</span> ` : "";
+    return `<tr class="${isActive ? 'preset-active' : ''}">
+      <td class="col-name">
+        <input class="preset-inline" value="${(p.name||'').replace(/"/g,'&quot;')}" onchange="renamePreset('${k}', this.value)" title="Klikni pro přejmenování">
+      </td>
+      <td class="col-note">
+        <input class="preset-inline" value="${(p.note||'').replace(/"/g,'&quot;')}" placeholder="poznámka..." onchange="notePreset('${k}', this.value)">
+      </td>
+      <td class="col-actions">
+        ${activeLabel}<button class="ascii-btn" onclick="applyPreset('${k}')">Načíst</button>
+        <button class="ascii-btn" onclick="deletePreset('${k}')">✕</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function renamePreset(key, newName) {
+  if(!_presets[key] || !newName.trim()) return;
+  _presets[key].name = newName.trim();
+  showToast(`Přejmenováno na "${newName.trim()}" — ulož pro zápis`);
+}
+
+function notePreset(key, note) {
+  if(!_presets[key]) return;
+  _presets[key].note = note;
+  showToast("Poznámka uložena — ulož pro zápis");
+}
+
+function applyPreset(key) {
+  const p = _presets[key];
+  if(!p || !p.config) return;
+  const cfg = p.config;
+  const days = ["Pondělí","Úterý","Středa","Čtvrtek","Pátek","Sobota","Neděle"];
+  for(const d of days) {
+    const id = d.substring(0,3);
+    if(cfg.regen && cfg.regen[d] !== undefined)
+      document.getElementById(`${id}-regen`).value = cfg.regen[d] || "";
+    if(cfg.light && cfg.light[d]) {
+      const sl1=cfg.light[d].slot1||{}; const sl2=cfg.light[d].slot2||{};
+      const s1=(sl1.start||"").split(":"); const e1=(sl1.end||"").split(":");
+      const s2=(sl2.start||"").split(":"); const e2=(sl2.end||"").split(":");
+      if(document.getElementById(`${id}-ls1h`)){document.getElementById(`${id}-ls1h`).value=s1[0]||"";document.getElementById(`${id}-ls1m`).value=s1[1]||"";}
+      if(document.getElementById(`${id}-le1h`)){document.getElementById(`${id}-le1h`).value=e1[0]||"";document.getElementById(`${id}-le1m`).value=e1[1]||"";}
+      if(document.getElementById(`${id}-ls2h`)){document.getElementById(`${id}-ls2h`).value=s2[0]||"";document.getElementById(`${id}-ls2m`).value=s2[1]||"";}
+      if(document.getElementById(`${id}-le2h`)){document.getElementById(`${id}-le2h`).value=e2[0]||"";document.getElementById(`${id}-le2m`).value=e2[1]||"";}
+    }
+    if(cfg.quiet && cfg.quiet[d]) {
+      const sl1=cfg.quiet[d].slot1||{}; const sl2=cfg.quiet[d].slot2||{};
+      const s1=(sl1.start||"").split(":"); const e1=(sl1.end||"").split(":");
+      const s2=(sl2.start||"").split(":"); const e2=(sl2.end||"").split(":");
+      if(document.getElementById(`${id}-qs1h`)){document.getElementById(`${id}-qs1h`).value=s1[0]||"";document.getElementById(`${id}-qs1m`).value=s1[1]||"";}
+      if(document.getElementById(`${id}-qe1h`)){document.getElementById(`${id}-qe1h`).value=e1[0]||"";document.getElementById(`${id}-qe1m`).value=e1[1]||"";}
+      if(document.getElementById(`${id}-qs2h`)){document.getElementById(`${id}-qs2h`).value=s2[0]||"";document.getElementById(`${id}-qs2m`).value=s2[1]||"";}
+      if(document.getElementById(`${id}-qe2h`)){document.getElementById(`${id}-qe2h`).value=e2[0]||"";document.getElementById(`${id}-qe2m`).value=e2[1]||"";}
+    }
+  }
+  if(cfg.other) {
+    const o = cfg.other;
+    if(o.timeOffset    !== undefined) document.getElementById("timeOffset").value    = o.timeOffset;
+    if(o.regenDuration !== undefined) document.getElementById("regenDuration").value = o.regenDuration;
+    if(o.regenStyle    !== undefined) document.getElementById("regenStyle").value    = o.regenStyle;
+    if(o.stepDelay     !== undefined) document.getElementById("stepDelay").value     = o.stepDelay;
+    if(o.cascadeSpeed  !== undefined) document.getElementById("cascadeSpeed").value  = o.cascadeSpeed;
+    if(o.trainWidth    !== undefined) document.getElementById("trainWidth").value    = o.trainWidth;
+    if(o.fadeDuration  !== undefined) document.getElementById("fadeDuration").value  = o.fadeDuration;
+    if(o.crossfadeEnabled !== undefined) document.getElementById("crossfadeEnabled").value = o.crossfadeEnabled;
+    if(o.quietEnabled  !== undefined) document.getElementById("quietEnabled").value  = o.quietEnabled;
+    if(o.musicEnabled  !== undefined) document.getElementById("musicEnabled").value  = o.musicEnabled;
+    if(o.overrideDate  !== undefined) { _overrideDate = o.overrideDate; updateOverrideStatus(_overrideDate); }
+  }
+  _activePresetKey = key;
+  renderPresetList();
+  showToast(`Preset "${p.name}" načten — ulož pro aplikaci`);
+}
+
+function openSavePreset() {
+  presetBox.innerHTML = `+---------------------------+
+|    Uložit aktuální preset  |
++---------------------------+
+
+Název:
+<input type="text" id="presetNameInput" class="text-input" placeholder="např. Pracovní den" style="width:200px">
+
+Poznámka:
+<input type="text" id="presetNoteInput" class="text-input" placeholder="volitelná poznámka" style="width:200px">
+
+<button class="ascii-btn" onclick="savePreset()">[ ULOŽIT ]</button>  <button class="ascii-btn" onclick="presetModal.style.display='none'">[ ZRUŠIT ]</button>`;
+  presetModal.style.display = "flex";
+  const inp = document.getElementById("presetNameInput");
+  inp.focus();
+  inp.addEventListener("keydown", e => {
+    if(e.key === "Enter") savePreset();
+    if(e.key === "Escape") presetModal.style.display = "none";
+  });
+}
+
+function savePreset() {
+  const name = (document.getElementById("presetNameInput").value || "").trim();
+  const note = (document.getElementById("presetNoteInput").value || "").trim();
+  if(!name) { showToast("Zadej název presetu"); return; }
+  presetModal.style.display = "none";
+  const key = "preset_" + Date.now();
+  _presets[key] = { name, note, config: gatherConfig() };
+  renderPresetList();
+  showToast(`Preset "${name}" připraven — ulož pro zápis`);
+}
+
+function deletePreset(key) {
+  const name = _presets[key]?.name || "";
+  if(!confirm(`Smazat preset "${name}"?`)) return;
+  if(_activePresetKey === key) _activePresetKey = null;
+  delete _presets[key];
+  renderPresetList();
+  showToast(`Preset "${name}" smazán — ulož pro zápis`);
+}
+
 /* ========== sestavení JSON z UI ========== */
 function gatherConfig(){
   const regen = {};
@@ -2244,7 +2420,10 @@ function gatherConfig(){
 const authModal = document.getElementById("authModal");
 const authBox = document.getElementById("authBox");
 
-function openAuth(){
+let _authMode = "save";
+
+function openAuth(mode){
+  _authMode = mode || "save";
   authBox.innerHTML = `
 ${makeFrame("ZADAT HESLO")}
 <input type="password" id="authPass" class="text-input" placeholder="••••••">
@@ -2273,85 +2452,73 @@ function closeAuth(ok){
 async function submitWithAuth(){
   const pass = document.getElementById("authPass").value || "";
   const config = gatherConfig();
-  
-  // Připravíme data PRO ESP32 (bez UI nastavení)
+
   const espConfig = {
     regen: config.regen,
     light: config.light,
     quiet: config.quiet,
     other: {
-      quietEnabled: config.other.quietEnabled,
-      musicEnabled: config.other.musicEnabled,
-      timeOffset: config.other.timeOffset,
-      regenDuration: config.other.regenDuration,
-      regenStyle: config.other.regenStyle,
-      stepDelay: config.other.stepDelay,
-      cascadeSpeed: config.other.cascadeSpeed,
-      trainWidth: config.other.trainWidth,
+      quietEnabled:     config.other.quietEnabled,
+      musicEnabled:     config.other.musicEnabled,
+      timeOffset:       config.other.timeOffset,
+      regenDuration:    config.other.regenDuration,
+      regenStyle:       config.other.regenStyle,
+      stepDelay:        config.other.stepDelay,
+      cascadeSpeed:     config.other.cascadeSpeed,
+      trainWidth:       config.other.trainWidth,
       crossfadeEnabled: config.other.crossfadeEnabled,
-      fadeDuration: config.other.fadeDuration,
-      clockEnabled: config.other.clockEnabled,
-      overrideDate: config.other.overrideDate
+      fadeDuration:     config.other.fadeDuration,
+      clockEnabled:     config.other.clockEnabled,
+      overrideDate:     config.other.overrideDate
     },
     lastModified: config.lastModified
   };
-  
-  // UI nastavení ukládáme ODDĚLENĚ
+
   const uiConfig = {
-    lockUIColor: config.other.lockUIColor,
-    uiColorValue: config.other.uiColorValue,
-    lockBgColor: config.other.lockBgColor,
-    bgColorValue: config.other.bgColorValue,
+    lockUIColor:   config.other.lockUIColor,
+    uiColorValue:  config.other.uiColorValue,
+    lockBgColor:   config.other.lockBgColor,
+    bgColorValue:  config.other.bgColorValue,
     activeEffects: config.other.activeEffects,
-    selectedFont: config.other.selectedFont,
+    selectedFont:  config.other.selectedFont,
     selectedStyle: config.other.selectedStyle
   };
-  
+
   try{
     showToast("Ukládám...", 10000);
-    
-    // Nejdřív nastavíme autentizační heslo
-    await DB.ref('/_auth').set({
-      password: pass,
-      timestamp: Date.now()
-    });
-    
-    // Počkáme chvíli než se heslo zapíše
+    await DB.ref('/_auth').set({ password: pass, timestamp: Date.now() });
     await new Promise(resolve => setTimeout(resolve, 300));
-    
-    // Teď uložíme oba configy (mají už přístup přes /_auth/password)
+
     await Promise.all([
       DB.ref('/config').set(espConfig),
-      DB.ref('/ui_config').set(uiConfig)
+      DB.ref('/ui_config').set(uiConfig),
+      DB.ref('/presets').set(_presets)
     ]);
-    
-    // Počkáme na dokončení
+
     await new Promise(resolve => setTimeout(resolve, 500));
-    
     closeAuth(true);
     await new Promise(resolve => setTimeout(resolve, 300));
-    
     showToast("Nastavení uloženo");
     await loadConfig();
-    
+
   }catch(e){
     console.error("Firebase error:", e);
     closeAuth(false);
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
     if(e.code === 'PERMISSION_DENIED' || e.message.includes('PERMISSION_DENIED')){
       showToast("Chyba: špatné heslo");
     }else{
       showToast("Chyba: " + e.message);
     }
   }finally{
-    // Vždy smazat _auth — i při chybě
     try { await DB.ref('/_auth').remove(); } catch(_) {}
   }
 }
 
 /* ========== event: klik ULOŽIT otevře auth modal ========== */
-saveBtn.addEventListener("click", ()=> openAuth());
+saveBtn.addEventListener("click", ()=> openAuth("save"));
+
+/* Načtení presetů při startu */
+loadPresets();
 
 </script>
 </body>
